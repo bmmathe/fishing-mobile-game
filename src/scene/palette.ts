@@ -1,0 +1,24 @@
+// Soft pastel low-poly palette tuned to the concept art:
+// muted greens, warm sand, pastel roofs, faceted shading.
+export const palette = {
+  sky: "#cfeae6",
+  fog: "#d6ece8",
+  water: "#7fc6d6",
+  waterDeep: "#5aa9bd",
+  grass: "#bcd9a0",
+  grassDark: "#a6c98a",
+  sand: "#ead9b0",
+  path: "#e4e2dc",
+  treeLeaf: "#8fc07a",
+  treeLeafAlt: "#7bb56a",
+  treePine: "#6fae74",
+  trunk: "#9c7b54",
+  roofPink: "#e7b6bc",
+  roofBlue: "#aacbe0",
+  roofSage: "#a9c8a6",
+  wall: "#f2ead9",
+  wallAlt: "#e9ddc4",
+  boatHull: "#b98a55",
+  boatWood: "#caa46e",
+  sail: "#f4efe2",
+} as const;

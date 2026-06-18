@@ -1,0 +1,91 @@
+# Tidal Ties
+
+Social fishing game — low-poly 3D, mobile-first. See [docs/social_fishing_game_prd.md](docs/social_fishing_game_prd.md) for the product spec.
+
+## Stack
+- **Three.js + React Three Fiber** (`@react-three/fiber`, `@react-three/drei`) — 3D rendering
+- **Vite + React + TypeScript** — app shell & dev server
+- **Ionic Capacitor** — wraps the web build into native iOS/Android apps
+- _Planned:_ Colyseus for authoritative real-time rooms (spot occupancy, trading, auctions)
+
+## Develop
+```bash
+npm install
+npm run dev        # http://localhost:5173 — fastest iteration loop
+npm run build      # type-check + production build into dist/
+npm run typecheck  # types only
+```
+
+## Mobile (Capacitor)
+```bash
+npm run cap:sync       # build web + copy into native projects
+npm run cap:android    # build, sync, and open Android Studio
+```
+- **Android** is added (`android/`). Building/running needs Android Studio + JDK.
+- **iOS** must be added on a Mac: `npm install @capacitor/ios && npx cap add ios` (requires Xcode + CocoaPods).
+
+## Project layout
+```
+src/
+  main.tsx            app entry
+  App.tsx             renders the fishing prototype
+  fishing/            the fishing-scene prototype (current focus)
+    fishingModel.ts   pure fight simulation (tension/run/stamina) + tuning
+    fishingStore.ts   external store driving scene + HUD; input + flow
+    FishingScene.tsx  3D scene: angler, bending rod, line, fish, water
+    FishingHud.tsx    DOM HUD: tension gauge, progress/stamina, control stick
+    FishingGame.tsx   composes Canvas + HUD
+  scene/              low-poly overworld-map placeholder (not currently shown)
+    palette.ts        shared pastel color palette
+    Island/Water/Trees/Village/Boat.tsx
+  ui/HudOverlay.tsx   (unused) earlier overlay
+scripts/sim.ts        headless tuning harness for the fight model
+```
+
+## The fishing minigame (drag-to-reel + steer)
+The catch loop is a skill-based tension fight — **not** a QTE or simple bar:
+- **Pull down** on the control stick to reel in; **steer left/right** to counter
+  the fish's runs.
+- Keep **line tension** in the safe band. Two failure modes:
+  - **Snap** — tension over the line's limit too long → the line breaks. The
+    dominant way you lose *big* fish (high tiers).
+  - **Shake-off** — a lightly-hooked fish (low `hookHold`) wriggles free during a
+    run; good tension control reduces but can't eliminate it. The dominant way
+    you lose *small* fish (low tiers).
+- Sustained pressure **tires the fish** (it yields line faster), but flirts with
+  the snap threshold. That risk/reward is the skill ceiling.
+
+Desktop testing: `Enter` casts, `↓`/`Space` reels, `←`/`→` steer.
+
+## Fish tiers (8) — `src/fishing/fishCatalog.ts`
+Full roster, params, and bait/gear gating: **[docs/fish_tiers.md](docs/fish_tiers.md)**.
+
+Tiers are **difficulty bands**, orthogonal to **water** (fresh/salt) and
+**location**. Each tier targets a skilled catch-rate on the *starter* line:
+
+| Tier | Target | Theme | Access |
+|---|---|---|---|
+| 1 | 80% | Forage & junk (minnows, boot, trash) | land |
+| 2 | 60% | Panfish & schoolers (incl. cut bait) | land |
+| 3 | 33% | Gamefish & **rare bait** for T6-8 | land |
+| 4 | 18% | Predators | land |
+| 5 | <5% | Apex (shore max) | land |
+| 6–8 | ~0% | Deepwater → Big game → Legendary | **boat only** |
+
+Every tier exists in both fresh and salt water with **different species**
+(e.g. fresh T3 = Largemouth Bass / Cisco; salt T3 = Striped Bass / Goggle-eye).
+Forward-looking data only (not yet active systems): `bait` (which tiers a forage
+fish lures), `locations` (region tags for the future travel/map), and
+`recommendedLine`/`baseLine` (gear gating — better lines raise the snap limit,
+turning the ~0% boat tiers into catchable fish). Boat tiers (6–8) are **locked
+🔒** in the UI until boats exist.
+
+Validate the catch-rate curve headlessly (no UI):
+```bash
+npm run sim   # per-tier skilled win-rate vs target, PASS/FAIL; reckless guard
+```
+
+> The fishing scene is the first vertical-slice prototype. The low-poly village
+> in `scene/` is an **art-direction placeholder** closer to the future overworld
+> map. Next up: overworld map → scene transition, then Colyseus multiplayer for
+> the dock occupancy test.
