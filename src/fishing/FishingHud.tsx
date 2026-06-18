@@ -9,7 +9,7 @@ const TIER_COLORS = ["#6fae74", "#8fbf64", "#c9c24f", "#e8b24a", "#e8934a", "#e0
 const TIER_WORDS = ["Novice", "Easy", "Moderate", "Hard", "Expert", "Master", "Elite", "Legendary"];
 const tierColor = (t: number) => TIER_COLORS[Math.min(Math.max(t, 1), 8) - 1];
 
-export function FishingHud({ store }: { store: FishingStore }) {
+export function FishingHud({ store, onExit }: { store: FishingStore; onExit?: () => void }) {
   // Re-render on every throttled store notify.
   useSyncExternalStore(store.subscribe, store.getVersion);
   const s = store.state;
@@ -56,6 +56,13 @@ export function FishingHud({ store }: { store: FishingStore }) {
 
   return (
     <div style={ui.root}>
+      {/* Leave the spot, back to the map */}
+      {onExit && (
+        <button style={ui.mapBtn} onClick={onExit}>
+          ← Map
+        </button>
+      )}
+
       {/* Top: progress + stamina (only once fighting) */}
       {fighting && (
         <div style={ui.topBars}>
@@ -163,55 +170,65 @@ function Meter({ label, pct, color }: { label: string; pct: number; color: strin
   );
 }
 
-/** Idle screen: pick water + difficulty tier, then cast. */
+/** Idle screen: the spot's name + Cast. Dev tier/water selectors gated behind DEV. */
 function CastPanel({ store }: { store: FishingStore }) {
   useSyncExternalStore(store.subscribe, store.getVersion);
+  const spot = store.currentSpot;
   const tier = getTier(store.selectedTier);
   const result = store.state.result;
 
   return (
     <div style={ui.castPanel}>
-      {/* Fresh / Salt toggle */}
-      <div style={ui.waterToggle}>
-        {(["fresh", "salt"] as Water[]).map((w) => (
-          <button
-            key={w}
-            style={{ ...ui.waterBtn, ...(store.selectedWater === w ? ui.waterBtnActive : null) }}
-            onClick={() => store.setWater(w)}
-          >
-            {w === "fresh" ? "🟦 Freshwater" : "🌊 Saltwater"}
-          </button>
-        ))}
-      </div>
+      {/* Spot identity (set by the map) */}
+      {spot && (
+        <div style={ui.holeRow}>
+          <span style={{ ...ui.qualityBadge, background: QUALITY_COLORS[spot.quality] }}>{spot.quality}</span>
+          <span style={{ fontWeight: 700 }}>{spot.name}</span>
+        </div>
+      )}
 
-      {/* 8-tier grid (4×2); boat tiers locked */}
-      <div style={ui.tierGrid}>
-        {TIERS.map((t) => {
-          const active = t.tier === store.selectedTier;
-          const locked = store.tierLocked(t.tier);
-          return (
-            <button
-              key={t.tier}
-              disabled={locked}
-              title={locked ? "Reachable by boat" : t.label}
-              style={{
-                ...ui.tierBtn,
-                borderColor: active ? tierColor(t.tier) : "transparent",
-                background: active ? "#fff" : "rgba(255,255,255,0.7)",
-                opacity: locked ? 0.5 : 1,
-                cursor: locked ? "not-allowed" : "pointer",
-              }}
-              onClick={() => store.selectTier(t.tier)}
-            >
-              <div style={{ fontSize: 17, fontWeight: 800, color: tierColor(t.tier) }}>{t.tier}</div>
-              <div style={{ fontSize: 8 }}>{locked ? "🔒" : TIER_WORDS[t.tier - 1]}</div>
-            </button>
-          );
-        })}
-      </div>
+      {/* DEV-only manual tier/water selectors (testing without the map) */}
+      {import.meta.env.DEV && (
+        <>
+          <div style={ui.waterToggle}>
+            {(["fresh", "salt"] as Water[]).map((w) => (
+              <button
+                key={w}
+                style={{ ...ui.waterBtn, ...(store.selectedWater === w ? ui.waterBtnActive : null) }}
+                onClick={() => store.setWater(w)}
+              >
+                {w === "fresh" ? "🟦 Freshwater" : "🌊 Saltwater"}
+              </button>
+            ))}
+          </div>
+          <div style={ui.tierGrid}>
+            {TIERS.map((t) => {
+              const active = t.tier === store.selectedTier;
+              const locked = store.tierLocked(t.tier);
+              return (
+                <button
+                  key={t.tier}
+                  disabled={locked}
+                  title={locked ? "Reachable by boat" : t.label}
+                  style={{
+                    ...ui.tierBtn,
+                    borderColor: active ? tierColor(t.tier) : "transparent",
+                    background: active ? "#fff" : "rgba(255,255,255,0.7)",
+                    opacity: locked ? 0.5 : 1,
+                    cursor: locked ? "not-allowed" : "pointer",
+                  }}
+                  onClick={() => store.selectTier(t.tier)}
+                >
+                  <div style={{ fontSize: 17, fontWeight: 800, color: tierColor(t.tier) }}>{t.tier}</div>
+                  <div style={{ fontSize: 8 }}>{locked ? "🔒" : TIER_WORDS[t.tier - 1]}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={ui.tierBlurb}>dev: {tier.label}</div>
+        </>
+      )}
 
-      <div style={ui.tierLabel}>{tier.label}</div>
-      <div style={ui.tierBlurb}>{tier.blurb}</div>
       <button style={ui.castBtn} onClick={() => store.cast()}>
         {result ? "Fish again" : "Cast"}
       </button>
@@ -279,7 +296,8 @@ const ui: Record<string, CSSProperties> = {
     padding:
       "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
   },
-  topBars: { position: "absolute", top: 16, left: 16, right: 16, display: "flex", gap: 12 },
+  mapBtn: { pointerEvents: "auto", position: "absolute", top: "max(14px, env(safe-area-inset-top))", left: "max(14px, env(safe-area-inset-left))", border: "none", borderRadius: 18, padding: "8px 14px", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", cursor: "pointer", zIndex: 2 },
+  topBars: { position: "absolute", top: 18, left: 96, right: 16, display: "flex", gap: 12 },
   meterLabel: { fontSize: 11, fontWeight: 600, opacity: 0.8, marginBottom: 3, textShadow: "0 1px 2px rgba(255,255,255,0.6)" },
   meterTrack: { height: 12, borderRadius: 6, background: "rgba(255,255,255,0.45)", overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)" },
   meterFill: { height: "100%", borderRadius: 6, transition: "width 0.08s linear" },

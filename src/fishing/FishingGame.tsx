@@ -1,20 +1,14 @@
-import { useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { FishingScene } from "./FishingScene";
 import { FishingHud } from "./FishingHud";
-import { createDefaultStore } from "./fishingStore";
+import type { FishingStore } from "./fishingStore";
 
 /**
- * The fishing-scene prototype: a fixed-camera, full-3D location where the
- * (stationary) angler fights a fish via the drag-to-reel + steer mechanic.
- * One store drives both the 3D scene and the DOM HUD.
+ * The fishing-scene: a fixed-camera, full-3D location where the (stationary)
+ * angler fights a fish via the drag-to-reel + steer mechanic. The store is
+ * owned by App (configured by the map spot) and shared with the HUD.
  */
-export function FishingGame() {
-  const [store] = useState(createDefaultStore);
-
-  // Dev-only: expose the store for debugging / automated testing in preview.
-  if (import.meta.env.DEV) (window as unknown as { fishStore: typeof store }).fishStore = store;
-
+export function FishingGame({ store, onExit }: { store: FishingStore; onExit: () => void }) {
   return (
     <>
       <Canvas
@@ -26,7 +20,7 @@ export function FishingGame() {
       >
         <FishingScene store={store} />
       </Canvas>
-      <FishingHud store={store} />
+      <FishingHud store={store} onExit={onExit} />
     </>
   );
 }

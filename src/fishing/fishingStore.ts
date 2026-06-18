@@ -16,7 +16,8 @@ import {
   type FishDef,
   type Water,
 } from "./fishCatalog";
-import { DEFAULT_HOLE, rollWaitTime, type FishingHole } from "./fishingHoles";
+import { DEFAULT_HOLE, QUALITY_CURVES, rollWaitTime, type FishingHole } from "./fishingHoles";
+import { pickTier, type Spot } from "../world/regions";
 
 export interface Catch {
   name: string;
@@ -42,6 +43,8 @@ export class FishingStore {
   selectedWater: Water = "fresh";
   /** The fishing hole — governs the wait-to-bite distribution. */
   currentHole: FishingHole = DEFAULT_HOLE;
+  /** The map spot being fished (null = dev tier/water selector mode). */
+  currentSpot: Spot | null = null;
   /** The fish currently hooked / about to be cast for. */
   private _fish: FishDef;
   /** Most recent landed catch, for the reveal. */
@@ -64,8 +67,12 @@ export class FishingStore {
     return this._fish;
   }
 
-  /** First land-accessible entry of the selected pool (for the idle display). */
+  /** A representative fish for the idle display (spot pool, else dev selection). */
   private displayFish(): FishDef {
+    const spot = this.currentSpot;
+    if (spot) {
+      return poolFor(spot.tiers[0].tier, spot.water, spot.access)[0] ?? this._fish;
+    }
     return poolFor(this.selectedTier, this.selectedWater, "land")[0] ?? this._fish;
   }
 
@@ -125,30 +132,54 @@ export class FishingStore {
     this.notify();
   }
 
-  /** Switch fishing hole (dev/console for now; the map will drive this later). */
+  /** Switch fishing hole (dev/console). */
   setHole(hole: FishingHole) {
     this.currentHole = hole;
     this.notify();
   }
 
+  /** Configure the store from a tapped map spot: water, hole (wait), fish pool. */
+  setSpot(spot: Spot) {
+    this.currentSpot = spot;
+    this.selectedWater = spot.water;
+    this.currentHole = {
+      id: spot.id,
+      name: spot.name,
+      quality: spot.quality,
+      water: spot.water,
+      ...QUALITY_CURVES[spot.quality],
+    };
+    this._fish = this.displayFish();
+    this.state = makeFight(this._fish);
+    this.notify();
+  }
+
+  /** Can we cast right now? (boat-locked only matters in dev tier mode.) */
+  private castBlocked(): boolean {
+    return !this.currentSpot && this.tierLocked(this.selectedTier);
+  }
+
   cast() {
-    if (!this.idle() || this.tierLocked(this.selectedTier)) return;
+    if (!this.idle() || this.castBlocked()) return;
     this.beginCast();
   }
 
   /** Re-throw: bail on a slow bite and roll a fresh fish + wait. */
   recast() {
-    if (this.tierLocked(this.selectedTier)) return;
-    const p = this.state.phase;
-    if (p === "fighting") return; // can't recast mid-fight
+    if (this.castBlocked() || this.state.phase === "fighting") return;
     this.beginCast();
   }
 
   private beginCast() {
-    // A random catch from the selected tier/water pool (land-only for now,
-    // includes junk in tier 1) — mimics a location's pool. The wait-to-bite is
-    // rolled from the current hole's quality curve.
-    this._fish = randomFishFromPool(this.selectedTier, this.selectedWater, Math.random, "land");
+    // A random catch from the spot's pool (or the dev tier/water selection),
+    // with the wait-to-bite rolled from the hole's quality curve.
+    const spot = this.currentSpot;
+    if (spot) {
+      const tier = pickTier(spot.tiers);
+      this._fish = randomFishFromPool(tier, spot.water, Math.random, spot.access);
+    } else {
+      this._fish = randomFishFromPool(this.selectedTier, this.selectedWater, Math.random, "land");
+    }
     this.state = startCast(this._fish, rollWaitTime(this.currentHole));
     this.releaseInput();
     this.notify();

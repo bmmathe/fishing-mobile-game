@@ -11,6 +11,7 @@
     "typecheck": "tsc -b --noEmit",
     "sim": "node scripts/sim.ts",
     "sim:wait": "node scripts/waitsim.ts",
+    "sim:regions": "node scripts/regionsim.ts",
     "cap:sync": "npm run build && cap sync",
     "cap:android": "npm run build && cap sync android && cap open android"
   },

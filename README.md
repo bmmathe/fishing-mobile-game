@@ -28,18 +28,22 @@ npm run cap:android    # build, sync, and open Android Studio
 ```
 src/
   main.tsx            app entry
-  App.tsx             renders the fishing prototype
-  fishing/            the fishing-scene prototype (current focus)
-    fishingModel.ts   pure fight simulation (tension/run/stamina) + tuning
-    fishingStore.ts   external store driving scene + HUD; input + flow
+  App.tsx             view manager: region-select → region-map → fishing
+  world/              the overworld map
+    regions.ts        Region/Spot data (4 US regions), pickTier, parity
+    RegionSelect.tsx  3D US, tap a region
+    RegionMap.tsx     3D region diorama with POI pins (water-colored, 🔒 boat)
+    SpotCard.tsx      spot info → "Fish here"
+  fishing/            the fishing scene
+    fishingModel.ts   pure fight simulation (tension/run/stamina/shake-off) + tuning
+    fishCatalog.ts    8-tier fish taxonomy (fresh/salt species, bait, junk)
+    fishingHoles.ts   hole quality (S–D) → wait-time curve
+    fishingStore.ts   external store driving scene + HUD; setSpot, cast, input
     FishingScene.tsx  3D scene: angler, bending rod, line, fish, water
     FishingHud.tsx    DOM HUD: tension gauge, progress/stamina, control stick
     FishingGame.tsx   composes Canvas + HUD
-  scene/              low-poly overworld-map placeholder (not currently shown)
-    palette.ts        shared pastel color palette
-    Island/Water/Trees/Village/Boat.tsx
-  ui/HudOverlay.tsx   (unused) earlier overlay
-scripts/sim.ts        headless tuning harness for the fight model
+  scene/              low-poly props + shared palette.ts (reused by world/)
+scripts/sim.ts        headless tuning harness (also sim:wait, sim:regions)
 ```
 
 ## The fishing minigame (drag-to-reel + steer)
@@ -109,7 +113,30 @@ dev handle (`setHole`); the map/travel system will own hole selection later.
 npm run sim:wait   # wait-time stats per quality: mean / stdev / CoV / percentiles
 ```
 
-> The fishing scene is the first vertical-slice prototype. The low-poly village
-> in `scene/` is an **art-direction placeholder** closer to the future overworld
-> map. Next up: overworld map → scene transition, then Colyseus multiplayer for
-> the dock occupancy test.
+## World map — `src/world/`
+The overworld is a 3D, two-level flow (App switches views):
+**Region select** (stylized low-poly 3D US, tap a region) → **Region map** (3D
+diorama of that region with a POI pin per spot) → tap a spot → **fishing scene**.
+
+A **`Spot`** ([regions.ts](src/world/regions.ts)) is the bridge: it carries
+`water`, `access`, waterbody `body`, hole `quality` (S–D wait), and a **weighted
+tier pool**. Tapping a spot calls `store.setSpot()`, which configures the fishing
+store's water, wait curve, and pool. Boat spots (deep-lake, offshore) render
+**locked 🔒** until boats exist.
+
+Starter territory is the **US**, rendered as a stylized low-poly silhouette
+partitioned into **8 pastel regions with boundary lines**. **4 are playable**
+coastal regions (Pacific NW, California, Gulf Coast, Florida/SE); the **4 interior
+regions** (Mountain West, Great Plains, Midwest/Great Lakes, Northeast) are
+**locked 🔒 and gray** until unlocked later. Each playable region is **balanced**:
+its spots cover tiers 1–8 in *both* fresh and salt water
+(stream/river/lake/deep-lake + beach/pier/offshore), with more fresh spots than
+salt. Verified by:
+```bash
+npm run sim:regions   # asserts every region covers tiers 1–8 in fresh & salt
+```
+
+> The dev tier/water/hole selectors are now gated behind `import.meta.env.DEV`;
+> normal play is spot-driven from the map. Next up: gear/line upgrades (unlock
+> the locked boat tiers), boats + travel, then Colyseus multiplayer for the dock
+> occupancy test.
