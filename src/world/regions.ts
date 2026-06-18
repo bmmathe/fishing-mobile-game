@@ -73,14 +73,16 @@ const GEO: Record<string, { pos: [number, number]; color: string; shape: [number
     shape: [[-11.5, -1], [-8, -1], [-7.5, 4.5], [-9, 5], [-11, 3]],
   },
   gulf: {
-    pos: [0.7, 5.3],
+    pos: [0.2, 5.4],
     color: "#a6d6d0",
-    shape: [[-3.5, 4], [1.5, 4], [4.5, 5], [2, 6.5], [-1, 7]],
+    // Texas bulge + Louisiana delta dip along the Gulf coast.
+    shape: [[-3.5, 4], [1.5, 4], [4.5, 5], [3, 6], [1.5, 6.9], [-0.3, 6.6], [-1.6, 7.7], [-3, 6]],
   },
   florida: {
-    pos: [6.8, 2],
+    pos: [6.9, 1.8],
     color: "#edc2c2",
-    shape: [[1.5, 0], [6.5, 0.5], [11, -0.5], [9.5, 3.5], [8.5, 4], [8.5, 8], [6.5, 5], [4.5, 5], [1.5, 4]],
+    // Narrow Florida peninsula hanging off a curved SE Atlantic coast.
+    shape: [[1.5, 0], [6.5, 0.5], [11, -0.5], [10, 2], [8.8, 3.6], [8.3, 4.2], [7.9, 8], [6.8, 5.2], [6, 4.6], [4.5, 5], [1.5, 4]],
   },
   // --- locked interior (gray) ---
   mountainwest: {
@@ -99,9 +101,10 @@ const GEO: Record<string, { pos: [number, number]; color: string; shape: [number
     shape: [[1.5, -6], [6.5, -6], [6.5, 0.5], [1.5, 0]],
   },
   northeast: {
-    pos: [8.8, -2.8],
+    pos: [8.7, -2.8],
     color: LOCKED_GRAY,
-    shape: [[6.5, -6], [12, -5.5], [11, -0.5], [6.5, 0.5]],
+    // Maine juts up to the northeast.
+    shape: [[6.5, -6], [11.5, -6.2], [12.3, -5], [11, -0.5], [6.5, 0.5]],
   },
 };
 

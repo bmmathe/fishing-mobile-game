@@ -118,6 +118,11 @@ The overworld is a 3D, two-level flow (App switches views):
 **Region select** (stylized low-poly 3D US, tap a region) → **Region map** (3D
 diorama of that region with a POI pin per spot) → tap a spot → **fishing scene**.
 
+The US map ([RegionSelect.tsx](src/world/RegionSelect.tsx)) has recognizable
+coastlines (Florida peninsula, Texas/Gulf, Maine) and low-poly decorations from
+[MapDecor.tsx](src/world/MapDecor.tsx) — mountains, pines, palms, an oil derrick,
+the Great Lakes, and drifting ocean fish — to give each region character.
+
 A **`Spot`** ([regions.ts](src/world/regions.ts)) is the bridge: it carries
 `water`, `access`, waterbody `body`, hole `quality` (S–D wait), and a **weighted
 tier pool**. Tapping a spot calls `store.setSpot()`, which configures the fishing
