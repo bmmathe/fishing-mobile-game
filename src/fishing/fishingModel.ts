@@ -115,6 +115,8 @@ export const TUNING = {
   throwGrace: 1.6,
   /** Bite window length in seconds. */
   biteWindow: 1.2,
+  /** How long before the bite the fish starts "nibbling" (the tell). */
+  nibbleLead: 0.7,
   /** Base shake-off hazard per second during a run at hookHold=0. */
   slipHazard: 0.8,
   /** Shake-off multiplier when tension is well-managed (the skill reward). */
@@ -143,11 +145,14 @@ export function makeFight(fish: FishSpec): FightState {
   };
 }
 
-/** Begin a cast → bite sequence. Returns a fresh fighting-ready state. */
-export function startCast(fish: FishSpec, rng: Rng = Math.random): FightState {
+/**
+ * Begin a cast → bite sequence. `waitSeconds` (the time until a bite) is rolled
+ * by the caller from the current fishing hole, keeping this model hole-agnostic.
+ */
+export function startCast(fish: FishSpec, waitSeconds: number): FightState {
   const s = makeFight(fish);
   s.phase = "waiting";
-  s.waitTimer = 0.8 + rng() * 2.4; // 0.8–3.2s before a bite
+  s.waitTimer = Math.max(0, waitSeconds);
   s.message = "Waiting for a bite…";
   return s;
 }
@@ -318,6 +323,11 @@ export function stepFight(
   }
 
   return s;
+}
+
+/** Is the fish nibbling — the brief tell just before the bite? */
+export function isNibbling(s: FightState): boolean {
+  return s.phase === "waiting" && s.waitTimer > 0 && s.waitTimer <= TUNING.nibbleLead;
 }
 
 /** Convenience: is the line in the visual danger zone? */

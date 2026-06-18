@@ -48,10 +48,13 @@ export function FishingScene({ store }: { store: FishingStore }) {
     if (fishRef.current) fishRef.current.visible = active;
     if (lineRef.current) lineRef.current.visible = active;
 
-    // Recolor the fish marker when the hooked species changes.
-    if (fishBodyRef.current && store.fish.color !== lastColor.current) {
-      lastColor.current = store.fish.color;
-      (fishBodyRef.current.material as THREE.MeshStandardMaterial).color.set(store.fish.color);
+    // Recolor the marker to the species only once hooked; keep a neutral red
+    // bobber while waiting so the color doesn't spoil what's biting.
+    const reveal = s.phase === "fighting" || s.phase === "bite";
+    const markerColor = reveal ? store.fish.color : "#d4564f";
+    if (fishBodyRef.current && markerColor !== lastColor.current) {
+      lastColor.current = markerColor;
+      (fishBodyRef.current.material as THREE.MeshStandardMaterial).color.set(markerColor);
     }
 
     // Rod load: bends toward the water as tension rises, tilts with steer.
@@ -68,12 +71,18 @@ export function FishingScene({ store }: { store: FishingStore }) {
     const fx = s.fishDirCurrent * LATERAL;
     const fz = MIN_Z + dz * (MAX_Z - MIN_Z);
     const splash = s.running ? Math.sin(t * 22) * 0.06 : 0;
-    v.fish.set(fx, 0.06 + splash, fz);
+    // Nibble tell: the bobber twitches and dips just before the bite.
+    const nibbling = store.nibbling;
+    const dip = nibbling ? Math.max(0, Math.sin(t * 13)) * 0.1 : 0;
+    const jitter = nibbling ? Math.sin(t * 31) * 0.05 : 0;
+    v.fish.set(fx + jitter, 0.06 + splash - dip, fz);
     fishRef.current.position.copy(v.fish);
 
-    // Ripple pulse.
+    // Ripple pulse (faster/stronger on a run or a nibble).
     if (rippleRef.current) {
-      const pulse = 1 + (Math.sin(t * (s.running ? 8 : 3)) * 0.5 + 0.5) * (s.running ? 0.9 : 0.4);
+      const rate = s.running ? 8 : nibbling ? 10 : 3;
+      const amp = s.running ? 0.9 : nibbling ? 0.7 : 0.4;
+      const pulse = 1 + (Math.sin(t * rate) * 0.5 + 0.5) * amp;
       rippleRef.current.scale.set(pulse, pulse, pulse);
     }
 

@@ -1,5 +1,6 @@
 import {
   isDanger,
+  isNibbling,
   makeFight,
   startCast,
   stepFight,
@@ -15,6 +16,7 @@ import {
   type FishDef,
   type Water,
 } from "./fishCatalog";
+import { DEFAULT_HOLE, rollWaitTime, type FishingHole } from "./fishingHoles";
 
 export interface Catch {
   name: string;
@@ -38,6 +40,8 @@ export class FishingStore {
   /** Selected difficulty tier (1–8) and water type — which pool we're fishing. */
   selectedTier = 1;
   selectedWater: Water = "fresh";
+  /** The fishing hole — governs the wait-to-bite distribution. */
+  currentHole: FishingHole = DEFAULT_HOLE;
   /** The fish currently hooked / about to be cast for. */
   private _fish: FishDef;
   /** Most recent landed catch, for the reveal. */
@@ -121,12 +125,31 @@ export class FishingStore {
     this.notify();
   }
 
+  /** Switch fishing hole (dev/console for now; the map will drive this later). */
+  setHole(hole: FishingHole) {
+    this.currentHole = hole;
+    this.notify();
+  }
+
   cast() {
     if (!this.idle() || this.tierLocked(this.selectedTier)) return;
+    this.beginCast();
+  }
+
+  /** Re-throw: bail on a slow bite and roll a fresh fish + wait. */
+  recast() {
+    if (this.tierLocked(this.selectedTier)) return;
+    const p = this.state.phase;
+    if (p === "fighting") return; // can't recast mid-fight
+    this.beginCast();
+  }
+
+  private beginCast() {
     // A random catch from the selected tier/water pool (land-only for now,
-    // includes junk in tier 1) — mimics a location's pool.
+    // includes junk in tier 1) — mimics a location's pool. The wait-to-bite is
+    // rolled from the current hole's quality curve.
     this._fish = randomFishFromPool(this.selectedTier, this.selectedWater, Math.random, "land");
-    this.state = startCast(this._fish);
+    this.state = startCast(this._fish, rollWaitTime(this.currentHole));
     this.releaseInput();
     this.notify();
   }
@@ -172,6 +195,10 @@ export class FishingStore {
 
   get danger(): boolean {
     return isDanger(this.state, this.line);
+  }
+
+  get nibbling(): boolean {
+    return isNibbling(this.state);
   }
 }
 

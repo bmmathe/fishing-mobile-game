@@ -85,6 +85,30 @@ Validate the catch-rate curve headlessly (no UI):
 npm run sim   # per-tier skilled win-rate vs target, PASS/FAIL; reckless guard
 ```
 
+## Fishing holes & wait time — `src/fishing/fishingHoles.ts`
+A **fishing hole** has a *quality* grade (S→D) — a separate axis from fish tiers —
+that shapes the wait-to-bite after a cast. Higher quality = **lower ceiling +
+more variance** (often near-instant, occasionally up to its short max); lower
+quality = **long but predictable**. The distribution averages `smoothing`
+uniforms (more = tighter) then applies a `skew` exponent (more = front-loaded).
+
+| Quality | max wait | feel |
+|---|---|---|
+| S | 5s | fast, erratic (high relative variance) |
+| A | 7s | quick, swingy |
+| B | 10s | moderate (default: *Town Lake*) |
+| C | 14s | longish, steadier |
+| D | 20s | long & predictable (~10s) |
+
+A subtle **nibble** tells just before the bite (bobber dip + "Something's
+nibbling…"); the player can **recast** anytime to bail on a slow bite. Holes are
+hardcoded samples for now (no UI picker) — switch via the `window.fishStore`
+dev handle (`setHole`); the map/travel system will own hole selection later.
+
+```bash
+npm run sim:wait   # wait-time stats per quality: mean / stdev / CoV / percentiles
+```
+
 > The fishing scene is the first vertical-slice prototype. The low-poly village
 > in `scene/` is an **art-direction placeholder** closer to the future overworld
 > map. Next up: overworld map → scene transition, then Colyseus multiplayer for

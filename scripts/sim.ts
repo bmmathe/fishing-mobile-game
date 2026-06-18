@@ -45,7 +45,7 @@ function makeRng(seed: number) {
 
 function play(fish: FishSpec, line: LineSpec, policy: Policy, seed: number) {
   const rng = makeRng(seed);
-  let s = startCast(fish, rng);
+  let s = startCast(fish, 0); // wait time is irrelevant to fight tuning
   while (s.phase === "waiting") s = stepFight(s, {}, fish, line, 1 / 60, rng);
   s = stepFight(s, { setHook: true }, fish, line, 1 / 60, rng);
 
@@ -58,7 +58,7 @@ function play(fish: FishSpec, line: LineSpec, policy: Policy, seed: number) {
   return s.result === "landed";
 }
 
-const SEEDS = [1, 7, 13, 29, 42, 88, 101, 233];
+const SEEDS = Array.from({ length: 40 }, (_, i) => i * 17 + 1);
 
 function winRate(fish: FishSpec, line: LineSpec, policy: Policy) {
   let wins = 0;

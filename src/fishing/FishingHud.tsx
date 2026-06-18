@@ -47,14 +47,17 @@ export function FishingHud({ store }: { store: FishingStore }) {
   }, [store]);
 
   const fighting = s.phase === "fighting" || s.phase === "bite";
-  const hooked = fighting || s.phase === "waiting";
+  const waiting = s.phase === "waiting";
   const showCast = s.phase === "idle" || s.phase === "landed" || s.phase === "lost";
   const isJunk = store.fish.kind === "junk";
+  const nibbling = store.nibbling;
+  // Don't reveal the species while waiting — only once it's hooked.
+  const centerMsg = waiting ? (nibbling ? "Something's nibbling…" : "Waiting for a bite…") : s.message;
 
   return (
     <div style={ui.root}>
-      {/* Top: progress + stamina */}
-      {hooked && (
+      {/* Top: progress + stamina (only once fighting) */}
+      {fighting && (
         <div style={ui.topBars}>
           <Meter label="Reeled in" pct={distancePct} color="#5aa9bd" />
           {!isJunk && <Meter label="Fish stamina" pct={s.stamina * 100} color="#d98a4f" />}
@@ -62,7 +65,7 @@ export function FishingHud({ store }: { store: FishingStore }) {
       )}
 
       {/* Hooked label */}
-      {hooked && (
+      {fighting && (
         <div style={ui.fishLabel}>
           <span style={{ fontWeight: 700 }}>{store.fish.name}</span>
           {!isJunk && (
@@ -92,20 +95,59 @@ export function FishingHud({ store }: { store: FishingStore }) {
       )}
 
       {/* Center message */}
-      {s.message && (
+      {centerMsg && (
         <div
           style={{
             ...ui.message,
-            color: s.result === "landed" ? "#2e7d4f" : s.result === "lost" ? "#c0392b" : "#3c5a57",
-            fontSize: s.result ? 24 : 18,
+            color: s.result === "landed"
+              ? "#2e7d4f"
+              : s.result === "lost"
+                ? "#c0392b"
+                : nibbling
+                  ? "#d98a4f"
+                  : "#3c5a57",
+            fontSize: s.result || nibbling ? 24 : 18,
           }}
         >
-          {s.message}
+          {centerMsg}
         </div>
       )}
 
-      {/* Bottom: tier picker + cast, or the control stick */}
-      <div style={ui.bottom}>{showCast ? <CastPanel store={store} /> : <Stick store={store} />}</div>
+      {/* Bottom: tier picker + cast · wait panel · or the control stick */}
+      <div style={ui.bottom}>
+        {showCast ? (
+          <CastPanel store={store} />
+        ) : waiting ? (
+          <WaitPanel store={store} />
+        ) : (
+          <Stick store={store} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+const QUALITY_COLORS: Record<string, string> = {
+  S: "#a8343c",
+  A: "#e0743f",
+  B: "#c9a24f",
+  C: "#6fae74",
+  D: "#7d8a82",
+};
+
+/** Waiting screen: which hole you're at + a Recast escape hatch. */
+function WaitPanel({ store }: { store: FishingStore }) {
+  useSyncExternalStore(store.subscribe, store.getVersion);
+  const hole = store.currentHole;
+  return (
+    <div style={ui.waitPanel}>
+      <div style={ui.holeRow}>
+        <span style={{ ...ui.qualityBadge, background: QUALITY_COLORS[hole.quality] }}>{hole.quality}</span>
+        <span style={{ fontWeight: 700 }}>{hole.name}</span>
+      </div>
+      <button style={ui.recastBtn} onClick={() => store.recast()}>
+        Reel in &amp; recast
+      </button>
     </div>
   );
 }
@@ -251,6 +293,10 @@ const ui: Record<string, CSSProperties> = {
   snapWarn: { fontSize: 12, fontWeight: 800, color: "#c0392b" },
   message: { position: "absolute", top: "14%", left: 0, right: 0, textAlign: "center", fontWeight: 700, textShadow: "0 1px 3px rgba(255,255,255,0.7)" },
   bottom: { position: "absolute", left: 0, right: 0, bottom: "max(20px, env(safe-area-inset-bottom))", display: "flex", justifyContent: "center" },
+  waitPanel: { pointerEvents: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.42)", borderRadius: 20, padding: "12px 18px", backdropFilter: "blur(4px)", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" },
+  holeRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 15 },
+  qualityBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, color: "#fff", fontWeight: 800, fontSize: 13 },
+  recastBtn: { pointerEvents: "auto", border: "none", borderRadius: 20, padding: "9px 26px", fontSize: 14, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", cursor: "pointer" },
   castPanel: { pointerEvents: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.42)", borderRadius: 20, padding: "12px 16px", backdropFilter: "blur(4px)", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" },
   waterToggle: { display: "flex", gap: 6 },
   waterBtn: { pointerEvents: "auto", border: "none", borderRadius: 14, padding: "6px 14px", fontSize: 12, fontWeight: 600, color: "#3c5a57", background: "rgba(255,255,255,0.6)", cursor: "pointer" },
