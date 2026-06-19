@@ -42,8 +42,12 @@ src/
     FishingScene.tsx  3D scene: angler, bending rod, line, fish, water
     FishingHud.tsx    DOM HUD: tension gauge, progress/stamina, control stick
     FishingGame.tsx   composes Canvas + HUD
+  game/               progression (economy + gear)
+    gear.ts           line/pole tiers + fishValue() pricing
+    playerStore.ts    currency, inventory, owned gear; localStorage persistence
+    TackleShop.tsx    Sell + Gear tabs (reached from the map)
   scene/              low-poly props + shared palette.ts (reused by world/)
-scripts/sim.ts        headless tuning harness (also sim:wait, sim:regions)
+scripts/sim.ts        headless tuning harness (also sim:wait, sim:regions, sim:gear)
 ```
 
 ## The fishing minigame (drag-to-reel + steer)
@@ -141,7 +145,24 @@ salt. Verified by:
 npm run sim:regions   # asserts every region covers tiers 1–8 in fresh & salt
 ```
 
-> The dev tier/water/hole selectors are now gated behind `import.meta.env.DEV`;
-> normal play is spot-driven from the map. Next up: gear/line upgrades (unlock
-> the locked boat tiers), boats + travel, then Colyseus multiplayer for the dock
-> occupancy test.
+> The dev tier/water/hole selectors are gated behind `import.meta.env.DEV`;
+> normal play is spot-driven from the map.
+
+## Progression: economy + gear — `src/game/`
+The core loop: **catch → sell → upgrade → land harder fish.** Landed fish go into
+an inventory ([playerStore.ts](src/game/playerStore.ts)); at the **Tackle Shop**
+(reached from the map) you sell them for currency and buy gear:
+- **Line tiers** raise the fight's snap limit (`maxTension`) — this is what
+  **unlocks higher fish tiers** (a tier-6 fish overwhelms the starter line).
+- **Pole tiers** raise reel speed (`reelMult`).
+
+Gear feeds the fight via `store.applyGear(maxTension, reelMult)`; the App banks
+catches through a `fishingStore.onCatch` hook. Progress persists to
+`localStorage`. Tuned so each line opens the next tier band and T8 stays a
+brutal end-game chase even with the best line — verified by:
+```bash
+npm run sim:gear   # gear-unlock curve per line tier + economy affordability
+```
+
+> Next up: boats + travel (unlock the locked 🔒 boat spots & gray regions), bait,
+> then Colyseus multiplayer for the PRD's real-time dock occupancy.

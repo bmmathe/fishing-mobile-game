@@ -35,8 +35,11 @@ export interface Catch {
  */
 export class FishingStore {
   state: FightState;
-  readonly line: LineSpec;
+  /** Equipped gear summary: maxTension (line) + reelMult (pole). Set via applyGear. */
+  line: LineSpec;
   readonly input: FightInput = { reel: 0, steer: 0 };
+  /** Called once per landed (non-junk) fish, so the app can bank the catch. */
+  onCatch?: (c: { name: string; tier: number; water: "fresh" | "salt"; weightKg: number }) => void;
 
   /** Selected difficulty tier (1–8) and water type — which pool we're fishing. */
   selectedTier = 1;
@@ -138,6 +141,12 @@ export class FishingStore {
     this.notify();
   }
 
+  /** Apply equipped gear: line snap-limit + pole reel multiplier. */
+  applyGear(maxTension: number, reelMult: number) {
+    this.line = { maxTension, reelMult };
+    this.notify();
+  }
+
   /** Configure the store from a tapped map spot: water, hole (wait), fish pool. */
   setSpot(spot: Spot) {
     this.currentSpot = spot;
@@ -214,6 +223,7 @@ export class FishingStore {
         const weightKg = rollWeight(f);
         this.lastCatch = { name: f.name, tier: f.tier, weightKg, isJunk: false };
         this.state.message = `Landed a ${weightKg} kg ${f.name}!`;
+        this.onCatch?.({ name: f.name, tier: f.tier, water: f.water, weightKg });
       }
     }
 

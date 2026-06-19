@@ -49,6 +49,8 @@ export interface FishSpec {
 export interface LineSpec {
   /** Tension at which the line is at its breaking point (1 = reference line). */
   maxTension: number;
+  /** Reel-in speed multiplier from the equipped pole (default 1). */
+  reelMult?: number;
 }
 
 export interface FightInput {
@@ -255,9 +257,9 @@ export function stepFight(
   s.tension = Math.max(0, s.tension);
 
   // --- Distance / stamina ---
-  // A tired fish yields line faster.
+  // A tired fish yields line faster; a better pole (reelMult) reels faster.
   const tiredBonus = 1 + (1 - s.stamina) * 0.8;
-  const gain = reel * TUNING.reelSpeed * tiredBonus;
+  const gain = reel * TUNING.reelSpeed * tiredBonus * (line.reelMult ?? 1);
   // The fish only takes meaningful line on an uncountered run.
   const lineOut = s.running ? pull * (1 - counter) * TUNING.runPull : 0;
   s.distance = clamp(s.distance + (lineOut - gain) * dt, 0, s.startDistance);
