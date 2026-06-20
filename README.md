@@ -47,8 +47,9 @@ src/
   game/               progression (economy + gear + boats + bait)
     gear.ts           line/pole/boat tiers, fishValue(), fishFee()
     bait.ts           bait defs (Worms + forage); tierBoost / waitFactor per bait
-    playerStore.ts    currency, cooler, bait box, gear/boat; localStorage persistence
-    TackleShop.tsx    Cooler (sell + →Bait) / Bait / Gear tabs
+    playerStore.ts    currency, cooler, bait box, gear/boat, trophies, fishdex; persisted
+    TackleShop.tsx    Cooler (sell / →Bait / 🏆Mount) / Bait / Gear tabs
+    Collection.tsx    Trophy Wall + Fishdex screens (reached via 🏆 on the map)
   scene/              low-poly props + shared palette.ts (reused by world/)
 scripts/sim.ts        headless harness (also sim:wait, sim:regions, sim:gear, sim:boat, sim:bait)
 ```
@@ -202,5 +203,13 @@ Shiner), or both; premium bait (Cisco, etc.) is catch-only, Worms are buyable
 npm run sim:bait   # bait effects + tier-distribution/wait shift with vs without bait
 ```
 
-> Next up: boat upgrades (radar/maintenance, PRD), the Trophy Wall, then Colyseus
-> multiplayer for the PRD's real-time spot occupancy + auction house.
+## Trophy Wall & Fishdex — `src/game/Collection.tsx`
+Reached via the **🏆** button on the map. The **Fishdex** auto-logs every landed
+species (count + record weight; junk excluded) and shows *discovered / total*
+with locked **???** entries teasing the rest. The **Trophy Wall** lets you
+**mount** a prized catch from the cooler (🏆 in the shop, `TROPHY_CAP` slots) to
+keep instead of sell; "take down" sells it. Both persist.
+
+> Next up: boat upgrades (radar/maintenance, PRD), on-device polish + bundle
+> code-split, then Colyseus multiplayer for the PRD's real-time spot occupancy +
+> auction house.

@@ -8,11 +8,12 @@ import { getRegion, type Spot } from "./world/regions";
 import { createPlayerStore } from "./game/playerStore";
 import { fishFee } from "./game/gear";
 import { TackleShop } from "./game/TackleShop";
+import { Collection } from "./game/Collection";
 import type { Water } from "./fishing/fishCatalog";
 
 // Views: region-map (your region) · travel (full US) · boat (drive the water) ·
-// fishing (the catch minigame) · shop (sell + gear/boats).
-type View = "region-map" | "travel" | "fishing" | "shop" | "boat";
+// fishing (the catch minigame) · shop (sell + gear/boats) · collection (trophies + fishdex).
+type View = "region-map" | "travel" | "fishing" | "shop" | "boat" | "collection";
 
 export default function App() {
   const [store] = useState(createDefaultStore);
@@ -148,10 +149,21 @@ export default function App() {
 
       {view === "shop" && <TackleShop store={player} onBack={() => setView(shopReturn)} />}
 
-      {/* Map overlay: wallet + Shop entry */}
+      {view === "collection" && <Collection store={player} onBack={() => setView(shopReturn)} />}
+
+      {/* Map overlay: wallet + Shop / Collection entries */}
       {onMap && (
         <div style={ui.mapOverlay}>
           <div style={ui.wallet}>${player.currency.toLocaleString()}</div>
+          <button
+            style={ui.shopBtn}
+            onClick={() => {
+              setShopReturn(view === "travel" ? "travel" : "region-map");
+              setView("collection");
+            }}
+          >
+            🏆
+          </button>
           <button style={ui.shopBtn} onClick={openShop}>
             🎣 Shop
           </button>

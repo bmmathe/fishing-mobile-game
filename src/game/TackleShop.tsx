@@ -65,6 +65,14 @@ function SellTab({ store }: { store: PlayerStore }) {
                   → Bait
                 </button>
               )}
+              <button
+                style={{ ...ui.baitBtn, ...(store.trophyWallFull ? ui.disabled : null) }}
+                disabled={store.trophyWallFull}
+                title={store.trophyWallFull ? "Trophy wall full" : "Mount on the Trophy Wall"}
+                onClick={() => store.mountTrophy(i)}
+              >
+                🏆
+              </button>
               <button style={ui.sellOne} onClick={() => store.sellOne(i)}>
                 +${f.value}
               </button>
@@ -208,6 +216,7 @@ const ui: Record<string, CSSProperties> = {
   sub: { fontSize: 12, opacity: 0.7 },
   sellOne: { border: "none", borderRadius: 12, padding: "8px 14px", fontSize: 14, fontWeight: 700, color: "#fff", background: "#3f9e6a", cursor: "pointer" },
   baitBtn: { border: "none", borderRadius: 12, padding: "8px 12px", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", cursor: "pointer" },
+  disabled: { opacity: 0.4, cursor: "not-allowed" },
   track: { background: "rgba(255,255,255,0.55)", borderRadius: 16, padding: 14, marginBottom: 4 },
   trackLabel: { fontSize: 12, fontWeight: 600, opacity: 0.8, marginBottom: 10 },
   trackRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },

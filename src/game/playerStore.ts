@@ -21,11 +21,31 @@ export interface BaitStack {
   count: number;
 }
 
+/** A mounted catch on the Trophy Wall. */
+export interface Trophy {
+  name: string;
+  tier: number;
+  water: "fresh" | "salt";
+  weightKg: number;
+  value: number;
+}
+
+/** A Fishdex entry: per-species collection record (auto-tracked on catch). */
+export interface DexEntry {
+  name: string;
+  tier: number;
+  water: "fresh" | "salt";
+  count: number;
+  maxWeightKg: number;
+}
+
 interface Persisted {
   currency: number;
   inventory: CaughtFish[];
   baitBox: Record<string, BaitStack>;
   equippedBaitId: string | null;
+  trophies: Trophy[];
+  fishdex: Record<string, DexEntry>;
   lineTier: number;
   poleTier: number;
   boatTier: number;
@@ -35,6 +55,8 @@ interface Persisted {
 const STORAGE_KEY = "tidalties.player";
 /** Cooler capacity — the catch inventory is bounded (upgradeable later). */
 export const COOLER_CAP = 24;
+/** Trophy Wall capacity. */
+export const TROPHY_CAP = 12;
 
 /**
  * Player progression: currency, the catch inventory, and owned gear. An
@@ -50,6 +72,9 @@ export class PlayerStore {
   /** Kept bait by id. */
   baitBox: Record<string, BaitStack> = {};
   equippedBaitId: string | null = null;
+  /** Mounted catches (Trophy Wall) + the species collection log (Fishdex). */
+  trophies: Trophy[] = [];
+  fishdex: Record<string, DexEntry> = {};
   /** Index into LINE_TIERS / POLE_TIERS of the currently owned (top) gear. */
   lineTier = 0;
   poleTier = 0;
@@ -115,7 +140,12 @@ export class PlayerStore {
 
   /** Keep a catch in the cooler. Returns false (released) if the cooler is full. */
   addCatch(c: { name: string; tier: number; water: "fresh" | "salt"; weightKg: number; bait?: FishBait }): boolean {
-    if (this.coolerFull) return false;
+    // Fishdex records the species even if the cooler is full (you still saw it).
+    this.recordDex(c);
+    if (this.coolerFull) {
+      this.changed();
+      return false;
+    }
     this.inventory.push({
       name: c.name,
       tier: c.tier,
@@ -126,6 +156,40 @@ export class PlayerStore {
     });
     this.changed();
     return true;
+  }
+
+  private recordDex(c: { name: string; tier: number; water: "fresh" | "salt"; weightKg: number }) {
+    const e = this.fishdex[c.name];
+    if (e) {
+      e.count += 1;
+      if (c.weightKg > e.maxWeightKg) e.maxWeightKg = c.weightKg;
+    } else {
+      this.fishdex[c.name] = { name: c.name, tier: c.tier, water: c.water, count: 1, maxWeightKg: c.weightKg };
+    }
+  }
+
+  // --- trophy wall ---
+  get trophyWallFull(): boolean {
+    return this.trophies.length >= TROPHY_CAP;
+  }
+
+  /** Mount a cooler fish on the wall (kept, not sold). False if wall is full. */
+  mountTrophy(coolerIndex: number): boolean {
+    const f = this.inventory[coolerIndex];
+    if (!f || this.trophyWallFull) return false;
+    this.trophies.push({ name: f.name, tier: f.tier, water: f.water, weightKg: f.weightKg, value: f.value });
+    this.inventory.splice(coolerIndex, 1);
+    this.changed();
+    return true;
+  }
+
+  /** Take a trophy down and sell it for its value. */
+  removeTrophy(index: number) {
+    const t = this.trophies[index];
+    if (!t) return;
+    this.currency += t.value;
+    this.trophies.splice(index, 1);
+    this.changed();
   }
 
   get inventoryValue(): number {
@@ -284,6 +348,8 @@ export class PlayerStore {
         inventory: this.inventory,
         baitBox: this.baitBox,
         equippedBaitId: this.equippedBaitId,
+        trophies: this.trophies,
+        fishdex: this.fishdex,
         lineTier: this.lineTier,
         poleTier: this.poleTier,
         boatTier: this.boatTier,
@@ -303,6 +369,8 @@ export class PlayerStore {
       this.inventory = (d.inventory ?? []).slice(0, COOLER_CAP);
       this.baitBox = d.baitBox ?? {};
       this.equippedBaitId = d.equippedBaitId && this.baitBox[d.equippedBaitId] ? d.equippedBaitId : null;
+      this.trophies = (d.trophies ?? []).slice(0, TROPHY_CAP);
+      this.fishdex = d.fishdex ?? {};
       this.lineTier = clampTier(d.lineTier, LINE_TIERS.length);
       this.poleTier = clampTier(d.poleTier, POLE_TIERS.length);
       this.boatTier = typeof d.boatTier === "number" ? Math.max(-1, Math.min(BOAT_TIERS.length - 1, Math.floor(d.boatTier))) : -1;
