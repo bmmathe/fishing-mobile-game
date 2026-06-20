@@ -1,6 +1,6 @@
 import { Canvas } from "@react-three/fiber";
 import { FishingScene } from "./FishingScene";
-import { FishingHud } from "./FishingHud";
+import { FishingHud, type BaitBarProps } from "./FishingHud";
 import type { FishingStore } from "./fishingStore";
 
 /**
@@ -8,7 +8,7 @@ import type { FishingStore } from "./fishingStore";
  * angler fights a fish via the drag-to-reel + steer mechanic. The store is
  * owned by App (configured by the map spot) and shared with the HUD.
  */
-export function FishingGame({ store, onExit }: { store: FishingStore; onExit: () => void }) {
+export function FishingGame({ store, onExit, bait }: { store: FishingStore; onExit: () => void; bait?: BaitBarProps }) {
   return (
     <>
       <Canvas
@@ -20,7 +20,7 @@ export function FishingGame({ store, onExit }: { store: FishingStore; onExit: ()
       >
         <FishingScene store={store} />
       </Canvas>
-      <FishingHud store={store} onExit={onExit} />
+      <FishingHud store={store} onExit={onExit} bait={bait} />
     </>
   );
 }

@@ -44,12 +44,13 @@ src/
     FishingScene.tsx  3D scene: angler, bending rod, line, fish, water
     FishingHud.tsx    DOM HUD: tension gauge, progress/stamina, control stick
     FishingGame.tsx   composes Canvas + HUD
-  game/               progression (economy + gear)
-    gear.ts           line/pole tiers + fishValue() pricing
-    playerStore.ts    currency, inventory, owned gear; localStorage persistence
-    TackleShop.tsx    Sell + Gear tabs (reached from the map)
+  game/               progression (economy + gear + boats + bait)
+    gear.ts           line/pole/boat tiers, fishValue(), fishFee()
+    bait.ts           bait defs (Worms + forage); tierBoost / waitFactor per bait
+    playerStore.ts    currency, cooler, bait box, gear/boat; localStorage persistence
+    TackleShop.tsx    Cooler (sell + →Bait) / Bait / Gear tabs
   scene/              low-poly props + shared palette.ts (reused by world/)
-scripts/sim.ts        headless tuning harness (also sim:wait, sim:regions, sim:gear)
+scripts/sim.ts        headless harness (also sim:wait, sim:regions, sim:gear, sim:boat, sim:bait)
 ```
 
 ## The fishing minigame (drag-to-reel + steer)
@@ -188,5 +189,18 @@ session stays net-positive. Boat ownership persists. Verified by:
 npm run sim:boat   # boat tiers, fee table, fee-vs-catch-value sanity
 ```
 
-> Next up: bait economy, boat upgrades (radar/maintenance, PRD), then Colyseus
-> multiplayer for the PRD's real-time dock occupancy.
+## Bait economy — `src/game/bait.ts`
+Caught fish go into a **limited cooler** (`COOLER_CAP`); from the shop you move a
+forage fish into the **bait box** (or buy standard **Worms**). Bait is sellable
+too. In the fishing cast panel you **equip a bait**: each bite consumes one and
+applies the bait's two independent levers — **`tierBoost`** (weights the spot's
+roll toward the bait's `forTiers` → more higher-tier bites) and **`waitFactor`**
+(shortens the wait). A bait can be tier-only (e.g. Menhaden), wait-only (Golden
+Shiner), or both; premium bait (Cisco, etc.) is catch-only, Worms are buyable
+(PRD). Bait does **not** ease reeling — that's gear. Persisted; verified by:
+```bash
+npm run sim:bait   # bait effects + tier-distribution/wait shift with vs without bait
+```
+
+> Next up: boat upgrades (radar/maintenance, PRD), the Trophy Wall, then Colyseus
+> multiplayer for the PRD's real-time spot occupancy + auction house.

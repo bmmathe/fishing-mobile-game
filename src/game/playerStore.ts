@@ -1,4 +1,10 @@
 import { BOAT_TIERS, fishValue, LINE_TIERS, POLE_TIERS } from "./gear";
+import { baitFromFish, WORMS, type BaitDef } from "./bait";
+
+export interface FishBait {
+  grade: number;
+  forTiers: number[];
+}
 
 export interface CaughtFish {
   name: string;
@@ -6,11 +12,20 @@ export interface CaughtFish {
   water: "fresh" | "salt";
   weightKg: number;
   value: number;
+  /** Present if this species can be kept as bait. */
+  bait?: FishBait;
+}
+
+export interface BaitStack {
+  def: BaitDef;
+  count: number;
 }
 
 interface Persisted {
   currency: number;
   inventory: CaughtFish[];
+  baitBox: Record<string, BaitStack>;
+  equippedBaitId: string | null;
   lineTier: number;
   poleTier: number;
   boatTier: number;
@@ -18,6 +33,8 @@ interface Persisted {
 }
 
 const STORAGE_KEY = "tidalties.player";
+/** Cooler capacity — the catch inventory is bounded (upgradeable later). */
+export const COOLER_CAP = 24;
 
 /**
  * Player progression: currency, the catch inventory, and owned gear. An
@@ -28,7 +45,11 @@ const STORAGE_KEY = "tidalties.player";
  */
 export class PlayerStore {
   currency = 0;
+  /** The cooler: caught fish, bounded by COOLER_CAP. */
   inventory: CaughtFish[] = [];
+  /** Kept bait by id. */
+  baitBox: Record<string, BaitStack> = {};
+  equippedBaitId: string | null = null;
   /** Index into LINE_TIERS / POLE_TIERS of the currently owned (top) gear. */
   lineTier = 0;
   poleTier = 0;
@@ -87,10 +108,24 @@ export class PlayerStore {
     return water === "fresh" ? true : this.boat.ocean; // ocean needs an ocean boat
   }
 
-  // --- catches ---
-  addCatch(c: { name: string; tier: number; water: "fresh" | "salt"; weightKg: number }) {
-    this.inventory.push({ ...c, value: fishValue(c.tier, c.weightKg) });
+  // --- catches (cooler) ---
+  get coolerFull(): boolean {
+    return this.inventory.length >= COOLER_CAP;
+  }
+
+  /** Keep a catch in the cooler. Returns false (released) if the cooler is full. */
+  addCatch(c: { name: string; tier: number; water: "fresh" | "salt"; weightKg: number; bait?: FishBait }): boolean {
+    if (this.coolerFull) return false;
+    this.inventory.push({
+      name: c.name,
+      tier: c.tier,
+      water: c.water,
+      weightKg: c.weightKg,
+      value: fishValue(c.tier, c.weightKg),
+      bait: c.bait,
+    });
     this.changed();
+    return true;
   }
 
   get inventoryValue(): number {
@@ -110,6 +145,81 @@ export class PlayerStore {
     this.currency += this.inventoryValue;
     this.inventory = [];
     this.changed();
+  }
+
+  // --- bait box ---
+  /** Move a baitfish from the cooler into the bait box. */
+  stockBait(coolerIndex: number) {
+    const f = this.inventory[coolerIndex];
+    if (!f || !f.bait) return;
+    const def = baitFromFish(f.name, f.bait.grade, f.bait.forTiers);
+    const stack = this.baitBox[def.id];
+    if (stack) stack.count += 1;
+    else this.baitBox[def.id] = { def, count: 1 };
+    this.inventory.splice(coolerIndex, 1);
+    this.changed();
+  }
+
+  buyWorms(qty = 1): boolean {
+    const cost = (WORMS.price ?? 0) * qty;
+    if (this.currency < cost) return false;
+    this.currency -= cost;
+    const stack = this.baitBox[WORMS.id];
+    if (stack) stack.count += qty;
+    else this.baitBox[WORMS.id] = { def: WORMS, count: qty };
+    this.changed();
+    return true;
+  }
+
+  /** Sell value of a bait unit (forage sells modestly; worms by their price). */
+  private baitUnitValue(def: BaitDef): number {
+    return def.grade === 0 ? Math.round((def.price ?? 0) * 0.5) : fishValue(def.grade + 1, 1);
+  }
+
+  sellBait(id: string, qty = 1) {
+    const stack = this.baitBox[id];
+    if (!stack) return;
+    const n = Math.min(qty, stack.count);
+    this.currency += this.baitUnitValue(stack.def) * n;
+    stack.count -= n;
+    if (stack.count <= 0) {
+      delete this.baitBox[id];
+      if (this.equippedBaitId === id) this.equippedBaitId = null;
+    }
+    this.changed();
+  }
+
+  equipBait(id: string | null) {
+    this.equippedBaitId = id && this.baitBox[id] ? id : null;
+    this.changed();
+  }
+
+  get equippedBait(): BaitStack | null {
+    return this.equippedBaitId ? this.baitBox[this.equippedBaitId] ?? null : null;
+  }
+
+  /** Effect of the equipped bait for the fight (null if none). */
+  get baitEffect(): { forTiers: number[]; tierBoost: number; waitFactor: number } | null {
+    const s = this.equippedBait;
+    return s ? { forTiers: s.def.forTiers, tierBoost: s.def.tierBoost, waitFactor: s.def.waitFactor } : null;
+  }
+
+  /** True if the equipped bait has stock (peek; doesn't consume). */
+  hasBait(): boolean {
+    return (this.equippedBait?.count ?? 0) > 0;
+  }
+
+  /** Consume one of the equipped bait. Returns false if none. */
+  consumeBait(): boolean {
+    const stack = this.equippedBait;
+    if (!stack || stack.count <= 0) return false;
+    stack.count -= 1;
+    if (stack.count <= 0) {
+      delete this.baitBox[stack.def.id];
+      this.equippedBaitId = null;
+    }
+    this.changed();
+    return true;
   }
 
   // --- gear purchases (buy the next tier up if affordable) ---
@@ -172,6 +282,8 @@ export class PlayerStore {
       const data: Persisted = {
         currency: this.currency,
         inventory: this.inventory,
+        baitBox: this.baitBox,
+        equippedBaitId: this.equippedBaitId,
         lineTier: this.lineTier,
         poleTier: this.poleTier,
         boatTier: this.boatTier,
@@ -188,7 +300,9 @@ export class PlayerStore {
       if (!raw) return;
       const d = JSON.parse(raw) as Partial<Persisted>;
       this.currency = d.currency ?? 0;
-      this.inventory = d.inventory ?? [];
+      this.inventory = (d.inventory ?? []).slice(0, COOLER_CAP);
+      this.baitBox = d.baitBox ?? {};
+      this.equippedBaitId = d.equippedBaitId && this.baitBox[d.equippedBaitId] ? d.equippedBaitId : null;
       this.lineTier = clampTier(d.lineTier, LINE_TIERS.length);
       this.poleTier = clampTier(d.poleTier, POLE_TIERS.length);
       this.boatTier = typeof d.boatTier === "number" ? Math.max(-1, Math.min(BOAT_TIERS.length - 1, Math.floor(d.boatTier))) : -1;

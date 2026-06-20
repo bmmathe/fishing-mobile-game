@@ -39,7 +39,20 @@ export class FishingStore {
   line: LineSpec;
   readonly input: FightInput = { reel: 0, steer: 0 };
   /** Called once per landed (non-junk) fish, so the app can bank the catch. */
-  onCatch?: (c: { name: string; tier: number; water: "fresh" | "salt"; weightKg: number }) => void;
+  onCatch?: (c: {
+    name: string;
+    tier: number;
+    water: "fresh" | "salt";
+    weightKg: number;
+    bait?: { grade: number; forTiers: number[] };
+  }) => void;
+
+  /** Equipped-bait effect (set by App), and stock hooks into the player store. */
+  baitForTiers: number[] | null = null;
+  baitTierBoost = 1;
+  baitWaitFactor = 1;
+  hasBait?: () => boolean;
+  consumeBait?: () => void;
 
   /** Selected difficulty tier (1–8) and water type — which pool we're fishing. */
   selectedTier = 1;
@@ -147,6 +160,14 @@ export class FishingStore {
     this.notify();
   }
 
+  /** Set the equipped bait's effect (null = no bait). Stock is checked via hasBait. */
+  setBait(effect: { forTiers: number[]; tierBoost: number; waitFactor: number } | null) {
+    this.baitForTiers = effect ? effect.forTiers : null;
+    this.baitTierBoost = effect ? effect.tierBoost : 1;
+    this.baitWaitFactor = effect ? effect.waitFactor : 1;
+    this.notify();
+  }
+
   /** Configure the store from a tapped map spot: water, hole (wait), fish pool. */
   setSpot(spot: Spot) {
     this.currentSpot = spot;
@@ -181,17 +202,28 @@ export class FishingStore {
 
   private beginCast() {
     // A random catch from the spot's pool (or the dev tier/water selection),
-    // with the wait-to-bite rolled from the hole's quality curve.
+    // with the wait-to-bite rolled from the hole's quality curve. Equipped bait
+    // (if in stock) biases the tier roll up and shortens the wait.
+    const baited = !!this.baitForTiers && (this.hasBait?.() ?? false);
     const spot = this.currentSpot;
     if (spot) {
-      const tier = pickTier(spot.tiers);
-      this._fish = randomFishFromPool(tier, spot.water, Math.random, spot.access);
+      const tiers = baited ? this.boostTiers(spot.tiers) : spot.tiers;
+      this._fish = randomFishFromPool(pickTier(tiers), spot.water, Math.random, spot.access);
     } else {
       this._fish = randomFishFromPool(this.selectedTier, this.selectedWater, Math.random, "land");
     }
-    this.state = startCast(this._fish, rollWaitTime(this.currentHole));
+    const wait = rollWaitTime(this.currentHole) * (baited ? this.baitWaitFactor : 1);
+    this.state = startCast(this._fish, wait);
+    // One bait per bite — only a real fish (not junk) consumes it.
+    if (baited && this._fish.kind !== "junk") this.consumeBait?.();
     this.releaseInput();
     this.notify();
+  }
+
+  /** Scale the weights of the bait's target tiers within a spot's pool. */
+  private boostTiers(tiers: { tier: number; weight: number }[]) {
+    const set = new Set(this.baitForTiers);
+    return tiers.map((t) => (set.has(t.tier) ? { tier: t.tier, weight: t.weight * this.baitTierBoost } : t));
   }
 
   reset() {
@@ -223,7 +255,13 @@ export class FishingStore {
         const weightKg = rollWeight(f);
         this.lastCatch = { name: f.name, tier: f.tier, weightKg, isJunk: false };
         this.state.message = `Landed a ${weightKg} kg ${f.name}!`;
-        this.onCatch?.({ name: f.name, tier: f.tier, water: f.water, weightKg });
+        this.onCatch?.({
+          name: f.name,
+          tier: f.tier,
+          water: f.water,
+          weightKg,
+          bait: f.bait ? { grade: f.bait.grade, forTiers: f.bait.forTiers } : undefined,
+        });
       }
     }
 

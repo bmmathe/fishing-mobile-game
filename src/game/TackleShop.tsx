@@ -1,11 +1,13 @@
 import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import { BOAT_TIERS, LINE_TIERS, POLE_TIERS } from "./gear";
-import type { PlayerStore } from "./playerStore";
+import { WORMS } from "./bait";
+import { COOLER_CAP, type PlayerStore } from "./playerStore";
 
-/** The Tackle Shop: sell your catch and buy gear upgrades. Reached from the map. */
+/** The Tackle Shop: sell your catch, manage bait, and buy gear. Reached from the map. */
 export function TackleShop({ store, onBack }: { store: PlayerStore; onBack: () => void }) {
   useSyncExternalStore(store.subscribe, store.getVersion);
-  const [tab, setTab] = useState<"sell" | "gear">("sell");
+  const [tab, setTab] = useState<"sell" | "bait" | "gear">("sell");
+  const baitCount = Object.values(store.baitBox).reduce((s, b) => s + b.count, 0);
 
   return (
     <div style={ui.root}>
@@ -19,21 +21,26 @@ export function TackleShop({ store, onBack }: { store: PlayerStore; onBack: () =
 
       <div style={ui.tabs}>
         <button style={{ ...ui.tab, ...(tab === "sell" ? ui.tabActive : null) }} onClick={() => setTab("sell")}>
-          Sell catch ({store.inventory.length})
+          Cooler {store.inventory.length}/{COOLER_CAP}
+        </button>
+        <button style={{ ...ui.tab, ...(tab === "bait" ? ui.tabActive : null) }} onClick={() => setTab("bait")}>
+          Bait ({baitCount})
         </button>
         <button style={{ ...ui.tab, ...(tab === "gear" ? ui.tabActive : null) }} onClick={() => setTab("gear")}>
           Gear
         </button>
       </div>
 
-      <div style={ui.body}>{tab === "sell" ? <SellTab store={store} /> : <GearTab store={store} />}</div>
+      <div style={ui.body}>
+        {tab === "sell" ? <SellTab store={store} /> : tab === "bait" ? <BaitTab store={store} /> : <GearTab store={store} />}
+      </div>
     </div>
   );
 }
 
 function SellTab({ store }: { store: PlayerStore }) {
   if (store.inventory.length === 0) {
-    return <div style={ui.empty}>Your catch bag is empty. Go fishing!</div>;
+    return <div style={ui.empty}>Your cooler is empty. Go fishing!</div>;
   }
   // Most recent first.
   const items = store.inventory.map((f, i) => ({ f, i })).reverse();
@@ -49,14 +56,56 @@ function SellTab({ store }: { store: PlayerStore }) {
               <div style={{ fontWeight: 700 }}>{f.name}</div>
               <div style={ui.sub}>
                 T{f.tier} · {f.weightKg} kg · {f.water === "fresh" ? "🟦" : "🌊"}
+                {f.bait ? " · 🪱 bait" : ""}
               </div>
             </div>
-            <button style={ui.sellOne} onClick={() => store.sellOne(i)}>
-              +${f.value}
-            </button>
+            <div style={{ display: "flex", gap: 6 }}>
+              {f.bait && (
+                <button style={ui.baitBtn} onClick={() => store.stockBait(i)}>
+                  → Bait
+                </button>
+              )}
+              <button style={ui.sellOne} onClick={() => store.sellOne(i)}>
+                +${f.value}
+              </button>
+            </div>
           </div>
         ))}
       </div>
+    </>
+  );
+}
+
+function BaitTab({ store }: { store: PlayerStore }) {
+  const stacks = Object.values(store.baitBox);
+  return (
+    <>
+      <button style={{ ...ui.sellAll, background: "#5aa9bd" }} onClick={() => store.buyWorms(5)}>
+        Buy 5 Worms (−${(WORMS.price ?? 0) * 5})
+      </button>
+      {stacks.length === 0 ? (
+        <div style={ui.empty}>No bait yet. Catch forage fish and tap "→ Bait", or buy Worms.</div>
+      ) : (
+        <div style={ui.list}>
+          {stacks.map(({ def, count }) => (
+            <div key={def.id} style={ui.row}>
+              <div>
+                <div style={{ fontWeight: 700 }}>
+                  {def.name} ×{count}
+                </div>
+                <div style={ui.sub}>
+                  lures T{Math.min(...def.forTiers)}–T{Math.max(...def.forTiers)}
+                  {def.tierBoost > 1 ? ` · ↑tier ×${def.tierBoost}` : ""}
+                  {def.waitFactor < 1 ? ` · ↓wait ×${def.waitFactor}` : ""}
+                </div>
+              </div>
+              <button style={ui.sellOne} onClick={() => store.sellBait(def.id, 1)}>
+                Sell 1
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -158,6 +207,7 @@ const ui: Record<string, CSSProperties> = {
   row: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.7)", borderRadius: 12, padding: "10px 14px" },
   sub: { fontSize: 12, opacity: 0.7 },
   sellOne: { border: "none", borderRadius: 12, padding: "8px 14px", fontSize: 14, fontWeight: 700, color: "#fff", background: "#3f9e6a", cursor: "pointer" },
+  baitBtn: { border: "none", borderRadius: 12, padding: "8px 12px", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", cursor: "pointer" },
   track: { background: "rgba(255,255,255,0.55)", borderRadius: 16, padding: 14, marginBottom: 4 },
   trackLabel: { fontSize: 12, fontWeight: 600, opacity: 0.8, marginBottom: 10 },
   trackRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },

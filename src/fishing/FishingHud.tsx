@@ -8,7 +8,13 @@ const TIER_COLORS = ["#6fae74", "#8fbf64", "#c9c24f", "#e8b24a", "#e8934a", "#e0
 const TIER_WORDS = ["Novice", "Easy", "Moderate", "Hard", "Expert", "Master", "Elite", "Legendary"];
 const tierColor = (t: number) => TIER_COLORS[Math.min(Math.max(t, 1), 8) - 1];
 
-export function FishingHud({ store, onExit }: { store: FishingStore; onExit?: () => void }) {
+export interface BaitBarProps {
+  options: { id: string; name: string; count: number; hint: string }[];
+  equippedId: string | null;
+  onEquip: (id: string | null) => void;
+}
+
+export function FishingHud({ store, onExit, bait }: { store: FishingStore; onExit?: () => void; bait?: BaitBarProps }) {
   // Re-render on every throttled store notify.
   useSyncExternalStore(store.subscribe, store.getVersion);
   const s = store.state;
@@ -122,7 +128,7 @@ export function FishingHud({ store, onExit }: { store: FishingStore; onExit?: ()
       {/* Bottom: tier picker + cast · wait panel · or the control stick */}
       <div style={ui.bottom}>
         {showCast ? (
-          <CastPanel store={store} />
+          <CastPanel store={store} bait={bait} />
         ) : waiting ? (
           <WaitPanel store={store} />
         ) : (
@@ -170,7 +176,7 @@ function Meter({ label, pct, color }: { label: string; pct: number; color: strin
 }
 
 /** Idle screen: the spot's name + Cast. Dev tier/water selectors gated behind DEV. */
-function CastPanel({ store }: { store: FishingStore }) {
+function CastPanel({ store, bait }: { store: FishingStore; bait?: BaitBarProps }) {
   useSyncExternalStore(store.subscribe, store.getVersion);
   const spot = store.currentSpot;
   const tier = getTier(store.selectedTier);
@@ -183,6 +189,28 @@ function CastPanel({ store }: { store: FishingStore }) {
         <div style={ui.holeRow}>
           <span style={{ ...ui.qualityBadge, background: QUALITY_COLORS[spot.quality] }}>{spot.quality}</span>
           <span style={{ fontWeight: 700 }}>{spot.name}</span>
+        </div>
+      )}
+
+      {/* Bait selector */}
+      {bait && bait.options.length > 0 && (
+        <div style={ui.baitRow}>
+          <button
+            style={{ ...ui.baitChip, ...(bait.equippedId === null ? ui.baitChipActive : null) }}
+            onClick={() => bait.onEquip(null)}
+          >
+            No bait
+          </button>
+          {bait.options.map((o) => (
+            <button
+              key={o.id}
+              style={{ ...ui.baitChip, ...(bait.equippedId === o.id ? ui.baitChipActive : null) }}
+              onClick={() => bait.onEquip(o.id)}
+              title={o.hint}
+            >
+              {o.name} ×{o.count}
+            </button>
+          ))}
         </div>
       )}
 
@@ -280,6 +308,9 @@ const ui: Record<string, CSSProperties> = {
   qualityBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, color: "#fff", fontWeight: 800, fontSize: 13 },
   recastBtn: { pointerEvents: "auto", border: "none", borderRadius: 20, padding: "9px 26px", fontSize: 14, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", cursor: "pointer" },
   castPanel: { pointerEvents: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.42)", borderRadius: 20, padding: "12px 16px", backdropFilter: "blur(4px)", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" },
+  baitRow: { display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", maxWidth: 300 },
+  baitChip: { border: "none", borderRadius: 12, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "#3c5a57", background: "rgba(255,255,255,0.7)", cursor: "pointer" },
+  baitChipActive: { background: "#5aa9bd", color: "#fff" },
   waterToggle: { display: "flex", gap: 6 },
   waterBtn: { pointerEvents: "auto", border: "none", borderRadius: 14, padding: "6px 14px", fontSize: 12, fontWeight: 600, color: "#3c5a57", background: "rgba(255,255,255,0.6)", cursor: "pointer" },
   waterBtnActive: { background: "#5aa9bd", color: "#fff" },

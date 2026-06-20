@@ -25,11 +25,17 @@ export default function App() {
   // Re-render when player state (currency, gear, location) changes.
   useSyncExternalStore(player.subscribe, player.getVersion);
 
-  // Bank every landed (non-junk) fish into the player inventory.
+  // Bank catches into the cooler + wire bait stock checks to the player.
   useEffect(() => {
     store.onCatch = (c) => player.addCatch(c);
+    store.hasBait = () => player.hasBait();
+    store.consumeBait = () => {
+      player.consumeBait();
+    };
     return () => {
       store.onCatch = undefined;
+      store.hasBait = undefined;
+      store.consumeBait = undefined;
     };
   }, [store, player]);
 
@@ -37,6 +43,11 @@ export default function App() {
   useEffect(() => {
     store.applyGear(player.lineMaxTension, player.reelMult);
   }, [store, player, player.lineTier, player.poleTier]);
+
+  // Keep the fight's bait effect in sync with the equipped bait.
+  useEffect(() => {
+    store.setBait(player.baitEffect);
+  }, [store, player, player.equippedBaitId]);
 
   // Dev-only: expose stores + navigation for debugging / automated testing.
   if (import.meta.env.DEV) {
@@ -69,6 +80,19 @@ export default function App() {
     setView("shop");
   };
   const onMap = view === "region-map" || view === "travel";
+
+  // Bait selector for the fishing HUD, built from the bait box.
+  const baitBar = {
+    options: Object.values(player.baitBox).map((s) => ({
+      id: s.def.id,
+      name: s.def.name,
+      count: s.count,
+      hint: `lures T${Math.min(...s.def.forTiers)}–T${Math.max(...s.def.forTiers)}` +
+        (s.def.tierBoost > 1 ? ` · ↑tier` : "") + (s.def.waitFactor < 1 ? ` · ↓wait` : ""),
+    })),
+    equippedId: player.equippedBaitId,
+    onEquip: (id: string | null) => player.equipBait(id),
+  };
 
   return (
     <Suspense fallback={null}>
@@ -120,7 +144,7 @@ export default function App() {
         />
       )}
 
-      {view === "fishing" && <FishingGame store={store} onExit={() => setView(fishingReturn)} />}
+      {view === "fishing" && <FishingGame store={store} onExit={() => setView(fishingReturn)} bait={baitBar} />}
 
       {view === "shop" && <TackleShop store={player} onBack={() => setView(shopReturn)} />}
 

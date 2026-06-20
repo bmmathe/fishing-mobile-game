@@ -14,6 +14,7 @@
     "sim:regions": "node scripts/regionsim.ts",
     "sim:gear": "node scripts/gearsim.ts",
     "sim:boat": "node scripts/boatsim.ts",
+    "sim:bait": "node scripts/baitsim.ts",
     "cap:sync": "npm run build && cap sync",
     "cap:android": "npm run build && cap sync android && cap open android"
   },
