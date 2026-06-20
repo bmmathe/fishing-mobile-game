@@ -47,18 +47,18 @@ export interface Region {
   color: string;
   /** Polygon outline on the US map (x, z); the 8 regions tile a US silhouette. */
   shape: [number, number][];
-  /** Locked (interior) regions are gray + non-selectable until they're unlocked. */
-  locked?: boolean;
+  /** Interior regions: higher-tier, not a valid starting spawn, pricier travel. */
+  central?: boolean;
+  /** Currency cost to travel here (charged on any region change). */
+  travelCost: number;
   spots: Spot[];
 }
 
-const LOCKED_GRAY = "#b9bdbd";
-
 /**
  * Stylized US silhouette partitioned into 8 regions that share vertices so they
- * tile with no gaps. The 4 playable regions hug the coasts; the 4 locked
- * (gray) regions fill the interior + Northeast. Coords: x = west→east,
- * z = north(−)→south(+).
+ * tile with no gaps. The 4 coastal regions hug the coasts (valid starts); the 4
+ * central regions fill the interior + Northeast (higher-tier, travel-gated).
+ * Coords: x = west→east, z = north(−)→south(+).
  */
 const GEO: Record<string, { pos: [number, number]; color: string; shape: [number, number][] }> = {
   // --- playable coastal ---
@@ -84,25 +84,25 @@ const GEO: Record<string, { pos: [number, number]; color: string; shape: [number
     // Narrow Florida peninsula hanging off a curved SE Atlantic coast.
     shape: [[1.5, 0], [6.5, 0.5], [11, -0.5], [10, 2], [8.8, 3.6], [8.3, 4.2], [7.9, 8], [6.8, 5.2], [6, 4.6], [4.5, 5], [1.5, 4]],
   },
-  // --- locked interior (gray) ---
+  // --- central interior (own pastels; gray applied dynamically when unaffordable) ---
   mountainwest: {
     pos: [-5.7, -1],
-    color: LOCKED_GRAY,
+    color: "#c2c9a8",
     shape: [[-8.5, -6], [-3.5, -6], [-3.5, 4], [-7.5, 4.5], [-8, -1]],
   },
   greatplains: {
     pos: [-1, -1],
-    color: LOCKED_GRAY,
+    color: "#e2d2a0",
     shape: [[-3.5, -6], [1.5, -6], [1.5, 4], [-3.5, 4]],
   },
   midwest: {
     pos: [3.9, -2.7],
-    color: LOCKED_GRAY,
+    color: "#a8c6d2",
     shape: [[1.5, -6], [6.5, -6], [6.5, 0.5], [1.5, 0]],
   },
   northeast: {
     pos: [8.7, -2.8],
-    color: LOCKED_GRAY,
+    color: "#c9b6cf",
     // Maine juts up to the northeast.
     shape: [[6.5, -6], [11.5, -6.2], [12.3, -5], [11, -0.5], [6.5, 0.5]],
   },
@@ -130,15 +130,20 @@ interface SpotInput {
   /** Optional per-spot flavor overrides. */
   quality?: HoleQuality;
   pos?: [number, number];
+  /** Override the body's default tier pool (central regions skew higher). */
+  tiers?: [number, number][];
 }
 
-/** A locked interior region: gray, no spots, not selectable yet. */
-function makeLocked(id: string, name: string, blurb: string): Region {
-  const geo = GEO[id];
-  return { id, name, blurb, pos: geo.pos, color: geo.color, shape: geo.shape, locked: true, spots: [] };
+interface RegionInput {
+  id: string;
+  name: string;
+  blurb: string;
+  travelCost: number;
+  central?: boolean;
+  spots: SpotInput[];
 }
 
-function makeRegion(id: string, name: string, blurb: string, spots: SpotInput[]): Region {
+function makeRegion({ id, name, blurb, travelCost, central, spots }: RegionInput): Region {
   const geo = GEO[id];
   return {
     id,
@@ -147,10 +152,13 @@ function makeRegion(id: string, name: string, blurb: string, spots: SpotInput[])
     pos: geo.pos,
     color: geo.color,
     shape: geo.shape,
-    spots: spots.map((s) => {
+    travelCost,
+    central,
+    // Duplicate body types in one region need explicit `pos` to avoid overlap.
+    spots: spots.map((s, i) => {
       const base = BODY[s.body];
       return {
-        id: `${id}-${s.body}`,
+        id: `${id}-${s.body}-${i}`,
         name: s.name,
         regionId: id,
         blurb: s.blurb,
@@ -158,7 +166,7 @@ function makeRegion(id: string, name: string, blurb: string, spots: SpotInput[])
         water: base.water,
         access: base.access,
         quality: s.quality ?? base.quality,
-        tiers: base.tiers,
+        tiers: s.tiers ? tw(s.tiers) : base.tiers,
         pos: s.pos ?? base.pos,
       };
     }),
@@ -166,48 +174,101 @@ function makeRegion(id: string, name: string, blurb: string, spots: SpotInput[])
 }
 
 export const REGIONS: Region[] = [
-  makeRegion("pnw", "Pacific Northwest", "Misty rivers, deep cold lakes, and a rugged Pacific coast.", [
-    { body: "stream", name: "Cascade Creek", blurb: "Snowmelt riffles full of little forage fish." },
-    { body: "river", name: "Columbia River", blurb: "Mighty river run — trout, salmon, and steelhead." },
-    { body: "lake", name: "Lake Washington", blurb: "City lake with scrappy bass and trout." },
-    { body: "deep-lake", name: "Lake Roosevelt", blurb: "Vast reservoir hiding monster sturgeon.", quality: "A" },
-    { body: "beach", name: "Westport Beach", blurb: "Surf-cast for forage along the Pacific sand." },
-    { body: "pier", name: "Seattle Pier", blurb: "Puget Sound pier — rockfish to salmon." },
-    { body: "offshore", name: "Pacific Bluewater", blurb: "Open ocean. Tuna and the truly huge.", quality: "S" },
-  ]),
-  makeRegion("california", "California", "Delta sloughs, Sierra lakes, and warm Pacific surf.", [
-    { body: "stream", name: "Sierra Creek", blurb: "High-country trickle of bait and panfish." },
-    { body: "river", name: "Sacramento Delta", blurb: "Sprawling delta — stripers and sturgeon." },
-    { body: "lake", name: "Clear Lake", blurb: "Legendary bass factory.", quality: "A" },
-    { body: "deep-lake", name: "Lake Shasta", blurb: "Deep, cold, and full of giants." },
-    { body: "beach", name: "Huntington Beach", blurb: "Classic SoCal surf fishing." },
-    { body: "pier", name: "Santa Monica Pier", blurb: "Iconic pier over the kelp." },
-    { body: "offshore", name: "San Diego Bluewater", blurb: "Tuna alley and marlin grounds.", quality: "S" },
-  ]),
-  makeRegion("gulf", "Gulf Coast", "Bayous, trophy bass lakes, and the warm Gulf.", [
-    { body: "stream", name: "Caddo Creek", blurb: "Cypress-shaded creek of minnows." },
-    { body: "river", name: "Atchafalaya Bayou", blurb: "Sprawling swamp — catfish country." },
-    { body: "lake", name: "Lake Fork", blurb: "The bass capital of Texas.", quality: "A" },
-    { body: "deep-lake", name: "Sam Rayburn", blurb: "Big reservoir, bigger fish." },
-    { body: "beach", name: "Galveston Beach", blurb: "Gulf surf for croaker and reds." },
-    { body: "pier", name: "Gulf Shores Pier", blurb: "Long pier into warm water." },
-    { body: "offshore", name: "Gulf Bluewater", blurb: "Rigs and reefs — tuna and grouper.", quality: "S" },
-  ]),
-  makeRegion("florida", "Florida / Southeast", "Endless lakes, spring rivers, and bluewater legends.", [
-    { body: "stream", name: "Spring Creek", blurb: "Crystal spring run teeming with bait." },
-    { body: "river", name: "St. Johns River", blurb: "Slow tannic river — bass and panfish." },
-    { body: "lake", name: "Lake Okeechobee", blurb: "The Big O — famous for giant bass.", quality: "A" },
-    { body: "deep-lake", name: "Okeechobee Deep", blurb: "Open-water trolling for the biggest." },
-    { body: "beach", name: "Cocoa Beach", blurb: "Atlantic surf and pompano." },
-    { body: "pier", name: "Naples Pier", blurb: "Gulf-side pier sunsets and snook." },
-    { body: "offshore", name: "Florida Keys", blurb: "Marlin, sailfish, swordfish. The dream.", quality: "S" },
-  ]),
+  // --- Coastal starting regions (broad T1–5, cheap travel) ---
+  makeRegion({
+    id: "pnw", name: "Pacific Northwest", travelCost: 300,
+    blurb: "Misty rivers, deep cold lakes, and a rugged Pacific coast.",
+    spots: [
+      { body: "stream", name: "Cascade Creek", blurb: "Snowmelt riffles full of little forage fish." },
+      { body: "river", name: "Columbia River", blurb: "Mighty river run — trout, salmon, and steelhead." },
+      { body: "lake", name: "Lake Washington", blurb: "City lake with scrappy bass and trout." },
+      { body: "deep-lake", name: "Lake Roosevelt", blurb: "Vast reservoir hiding monster sturgeon.", quality: "A" },
+      { body: "beach", name: "Westport Beach", blurb: "Surf-cast for forage along the Pacific sand." },
+      { body: "pier", name: "Seattle Pier", blurb: "Puget Sound pier — rockfish to salmon." },
+      { body: "offshore", name: "Pacific Bluewater", blurb: "Open ocean. Tuna and the truly huge.", quality: "S" },
+    ],
+  }),
+  makeRegion({
+    id: "california", name: "California", travelCost: 350,
+    blurb: "Delta sloughs, Sierra lakes, and warm Pacific surf.",
+    spots: [
+      { body: "stream", name: "Sierra Creek", blurb: "High-country trickle of bait and panfish." },
+      { body: "river", name: "Sacramento Delta", blurb: "Sprawling delta — stripers and sturgeon." },
+      { body: "lake", name: "Clear Lake", blurb: "Legendary bass factory.", quality: "A" },
+      { body: "deep-lake", name: "Lake Shasta", blurb: "Deep, cold, and full of giants." },
+      { body: "beach", name: "Huntington Beach", blurb: "Classic SoCal surf fishing." },
+      { body: "pier", name: "Santa Monica Pier", blurb: "Iconic pier over the kelp." },
+      { body: "offshore", name: "San Diego Bluewater", blurb: "Tuna alley and marlin grounds.", quality: "S" },
+    ],
+  }),
+  makeRegion({
+    id: "gulf", name: "Gulf Coast", travelCost: 300,
+    blurb: "Bayous, trophy bass lakes, and the warm Gulf.",
+    spots: [
+      { body: "stream", name: "Caddo Creek", blurb: "Cypress-shaded creek of minnows." },
+      { body: "river", name: "Atchafalaya Bayou", blurb: "Sprawling swamp — catfish country." },
+      { body: "lake", name: "Lake Fork", blurb: "The bass capital of Texas.", quality: "A" },
+      { body: "deep-lake", name: "Sam Rayburn", blurb: "Big reservoir, bigger fish." },
+      { body: "beach", name: "Galveston Beach", blurb: "Gulf surf for croaker and reds." },
+      { body: "pier", name: "Gulf Shores Pier", blurb: "Long pier into warm water." },
+      { body: "offshore", name: "Gulf Bluewater", blurb: "Rigs and reefs — tuna and grouper.", quality: "S" },
+    ],
+  }),
+  makeRegion({
+    id: "florida", name: "Florida / Southeast", travelCost: 400,
+    blurb: "Endless lakes, spring rivers, and bluewater legends.",
+    spots: [
+      { body: "stream", name: "Spring Creek", blurb: "Crystal spring run teeming with bait." },
+      { body: "river", name: "St. Johns River", blurb: "Slow tannic river — bass and panfish." },
+      { body: "lake", name: "Lake Okeechobee", blurb: "The Big O — famous for giant bass.", quality: "A" },
+      { body: "deep-lake", name: "Okeechobee Deep", blurb: "Open-water trolling for the biggest." },
+      { body: "beach", name: "Cocoa Beach", blurb: "Atlantic surf and pompano." },
+      { body: "pier", name: "Naples Pier", blurb: "Gulf-side pier sunsets and snook." },
+      { body: "offshore", name: "Florida Keys", blurb: "Marlin, sailfish, swordfish. The dream.", quality: "S" },
+    ],
+  }),
 
-  // Locked interior regions (gray, unlock later)
-  makeLocked("mountainwest", "Mountain West", "Alpine lakes and rushing rivers — coming soon."),
-  makeLocked("greatplains", "Great Plains", "Prairie reservoirs and farm ponds — coming soon."),
-  makeLocked("midwest", "Midwest / Great Lakes", "The inland seas — coming soon."),
-  makeLocked("northeast", "Northeast", "Storied rivers and the Atlantic coast — coming soon."),
+  // --- Central regions (higher-tier T3–5 land, pricey travel; reach via travel) ---
+  makeRegion({
+    id: "mountainwest", name: "Mountain West", travelCost: 2000, central: true,
+    blurb: "Alpine lakes and rushing rivers — bigger, harder fish.",
+    spots: [
+      { body: "river", name: "Snake River", blurb: "Cold, fast water — trout and pike.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-5, 2] },
+      { body: "lake", name: "Flathead Lake", blurb: "Huge alpine lake of lake trout.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-1, -2] },
+      { body: "lake", name: "Alpine Tarn", blurb: "Glacial pool, surprisingly toothy.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-6, -3.5] },
+      { body: "deep-lake", name: "Glacier Depths", blurb: "Sunless deep — true giants.", quality: "A", pos: [-3, 5] },
+    ],
+  }),
+  makeRegion({
+    id: "greatplains", name: "Great Plains", travelCost: 1800, central: true,
+    blurb: "Prairie reservoirs and big-river catfish.",
+    spots: [
+      { body: "river", name: "Missouri River", blurb: "Wide and slow — flathead country.", tiers: [[3, 0.4], [4, 0.4], [5, 0.2]], pos: [-5, 1] },
+      { body: "lake", name: "Lake Oahe", blurb: "Vast reservoir — walleye and pike.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-2, -2] },
+      { body: "lake", name: "Farm Reservoir", blurb: "Quiet water, fat bass.", tiers: [[3, 0.5], [4, 0.4], [5, 0.1]], pos: [-6, -3] },
+      { body: "deep-lake", name: "Oahe Deep", blurb: "Open-water trolling for monsters.", quality: "A", pos: [-3, 5] },
+    ],
+  }),
+  makeRegion({
+    id: "midwest", name: "Midwest / Great Lakes", travelCost: 3000, central: true,
+    blurb: "The inland seas — trophy water through and through.",
+    spots: [
+      { body: "lake", name: "Lake Michigan", blurb: "Inland sea of salmon and trout.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-5, -2] },
+      { body: "lake", name: "Lake Erie", blurb: "Walleye capital of the world.", tiers: [[4, 0.45], [5, 0.4], [3, 0.15]], pos: [-1, 0] },
+      { body: "river", name: "Mississippi Headwaters", blurb: "Where the great river begins.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-6, 2.5] },
+      { body: "deep-lake", name: "Superior Deep", blurb: "Cold, black, and bottomless.", quality: "S", pos: [-3, 5] },
+    ],
+  }),
+  makeRegion({
+    id: "northeast", name: "Northeast", travelCost: 2500, central: true,
+    blurb: "Storied rivers and the cold Atlantic coast.",
+    spots: [
+      { body: "river", name: "Hudson River", blurb: "Tidal river — stripers and shad.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-4, 1] },
+      { body: "beach", name: "Montauk Point", blurb: "The surfcasting mecca.", quality: "A", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [5, -3] },
+      { body: "pier", name: "Cape Cod Pier", blurb: "Cold-water blues and bass.", tiers: [[3, 0.4], [4, 0.35], [5, 0.25]], pos: [6, 1] },
+      { body: "offshore", name: "Georges Bank", blurb: "Legendary cod & tuna grounds.", quality: "S", pos: [7, 4] },
+    ],
+  }),
 ];
 
 export function getRegion(id: string): Region {

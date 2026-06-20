@@ -1,4 +1,4 @@
-import { fishValue, LINE_TIERS, POLE_TIERS } from "./gear";
+import { BOAT_TIERS, fishValue, LINE_TIERS, POLE_TIERS } from "./gear";
 
 export interface CaughtFish {
   name: string;
@@ -13,6 +13,8 @@ interface Persisted {
   inventory: CaughtFish[];
   lineTier: number;
   poleTier: number;
+  boatTier: number;
+  currentRegionId: string | null;
 }
 
 const STORAGE_KEY = "tidalties.player";
@@ -30,6 +32,10 @@ export class PlayerStore {
   /** Index into LINE_TIERS / POLE_TIERS of the currently owned (top) gear. */
   lineTier = 0;
   poleTier = 0;
+  /** Index into BOAT_TIERS of the owned boat, or -1 if none. */
+  boatTier = -1;
+  /** The region the player is currently located in (null = pick a start). */
+  currentRegionId: string | null = null;
 
   private version = 0;
   private listeners = new Set<() => void>();
@@ -65,6 +71,22 @@ export class PlayerStore {
     return POLE_TIERS[this.poleTier];
   }
 
+  // --- boat ---
+  get ownsBoat(): boolean {
+    return this.boatTier >= 0;
+  }
+  get boat() {
+    return this.boatTier >= 0 ? BOAT_TIERS[this.boatTier] : null;
+  }
+  get boatSpeed(): number {
+    return this.boat?.speed ?? 1;
+  }
+  /** Can the player take a boat out on this water with their current boat? */
+  canBoat(water: "fresh" | "salt"): boolean {
+    if (!this.boat) return false;
+    return water === "fresh" ? true : this.boat.ocean; // ocean needs an ocean boat
+  }
+
   // --- catches ---
   addCatch(c: { name: string; tier: number; water: "fresh" | "salt"; weightKg: number }) {
     this.inventory.push({ ...c, value: fishValue(c.tier, c.weightKg) });
@@ -97,13 +119,49 @@ export class PlayerStore {
   buyPole(): boolean {
     return this.buy(POLE_TIERS, "poleTier");
   }
-  private buy(tiers: { price: number }[], key: "lineTier" | "poleTier"): boolean {
-    const next = this[key] + 1;
+  buyBoat(): boolean {
+    return this.buy(BOAT_TIERS, "boatTier");
+  }
+  private buy(tiers: { price: number }[], key: "lineTier" | "poleTier" | "boatTier"): boolean {
+    const next = this[key] + 1; // boatTier starts at -1 → next 0 = first boat
     if (next >= tiers.length) return false; // maxed
     const price = tiers[next].price;
     if (this.currency < price) return false; // can't afford
     this.currency -= price;
     this[key] = next;
+    this.changed();
+    return true;
+  }
+
+  // --- fishing fee (per-session sink, charged on entering a spot) ---
+  payFishFee(amount: number): boolean {
+    if (this.currency < amount) return false;
+    this.currency -= amount;
+    this.changed();
+    return true;
+  }
+
+  // --- travel ---
+  canAfford(cost: number): boolean {
+    return this.currency >= cost;
+  }
+
+  /** Free first spawn — only valid before a region is chosen. */
+  startIn(regionId: string) {
+    if (this.currentRegionId !== null) return;
+    this.currentRegionId = regionId;
+    this.changed();
+  }
+
+  /**
+   * Move to a region. Re-entering the current region is free; any other region
+   * costs `cost` (and is refused if unaffordable). Returns whether we moved.
+   */
+  travelTo(regionId: string, cost: number): boolean {
+    if (regionId === this.currentRegionId) return true; // already here, free
+    if (this.currency < cost) return false;
+    this.currency -= cost;
+    this.currentRegionId = regionId;
     this.changed();
     return true;
   }
@@ -116,6 +174,8 @@ export class PlayerStore {
         inventory: this.inventory,
         lineTier: this.lineTier,
         poleTier: this.poleTier,
+        boatTier: this.boatTier,
+        currentRegionId: this.currentRegionId,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
@@ -131,6 +191,8 @@ export class PlayerStore {
       this.inventory = d.inventory ?? [];
       this.lineTier = clampTier(d.lineTier, LINE_TIERS.length);
       this.poleTier = clampTier(d.poleTier, POLE_TIERS.length);
+      this.boatTier = typeof d.boatTier === "number" ? Math.max(-1, Math.min(BOAT_TIERS.length - 1, Math.floor(d.boatTier))) : -1;
+      this.currentRegionId = d.currentRegionId ?? null;
     } catch {
       // ignore corrupt save
     }

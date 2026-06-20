@@ -28,12 +28,14 @@ npm run cap:android    # build, sync, and open Android Studio
 ```
 src/
   main.tsx            app entry
-  App.tsx             view manager: region-select → region-map → fishing
-  world/              the overworld map
-    regions.ts        Region/Spot data (4 US regions), pickTier, parity
-    RegionSelect.tsx  3D US, tap a region
-    RegionMap.tsx     3D region diorama with POI pins (water-colored, 🔒 boat)
-    SpotCard.tsx      spot info → "Fish here"
+  App.tsx             view manager: region-map · travel · boat · fishing · shop
+  world/              the overworld
+    regions.ts        Region/Spot data (8 US regions), travelCost, pickTier
+    RegionSelect.tsx  3D US (start | travel modes), per-region costs/locks
+    RegionMap.tsx     3D region diorama; land POI pins (foot-or-boat menu)
+    SpotCard.tsx      foot-or-boat menu (fish on foot / take the boat out)
+    BoatScene.tsx     top-down boat: drive (stick) to buoys → Fish here
+  ui/Stick.tsx        shared virtual thumb-stick (fishing reel + boat steer)
   fishing/            the fishing scene
     fishingModel.ts   pure fight simulation (tension/run/stamina/shake-off) + tuning
     fishCatalog.ts    8-tier fish taxonomy (fresh/salt species, bait, junk)
@@ -133,16 +135,22 @@ tier pool**. Tapping a spot calls `store.setSpot()`, which configures the fishin
 store's water, wait curve, and pool. Boat spots (deep-lake, offshore) render
 **locked 🔒** until boats exist.
 
-Starter territory is the **US**, rendered as a stylized low-poly silhouette
-partitioned into **8 pastel regions with boundary lines**. **4 are playable**
-coastal regions (Pacific NW, California, Gulf Coast, Florida/SE); the **4 interior
-regions** (Mountain West, Great Plains, Midwest/Great Lakes, Northeast) are
-**locked 🔒 and gray** until unlocked later. Each playable region is **balanced**:
-its spots cover tiers 1–8 in *both* fresh and salt water
-(stream/river/lake/deep-lake + beach/pier/offshore), with more fresh spots than
-salt. Verified by:
+Starter territory is the **US**, a stylized low-poly silhouette of **8 pastel
+regions**. The **4 coastal regions** (Pacific NW, California, Gulf, Florida/SE)
+are valid **free starting spawns** and cover tiers 1–8 in both fresh & salt. The
+**4 central regions** (Mountain West, Great Plains, Midwest/Great Lakes,
+Northeast) are **higher-tier** (T3–5 land, freshwater except Northeast's Atlantic
+coast) and reached only by **traveling**.
+
+**Travel** (`playerStore.currentRegionId`): you spawn in one coastal region and
+are locked to it until you **pay to move**. Zoom out from a region (🗺 Travel) to
+the full US, where each region shows its **travel cost** — coastal moves are
+cheap, central moves expensive. Any region change costs (including returning to
+your start); re-entering the region you're in is free; regions you can't afford
+show the price and are locked. `RegionSelect` has two modes (`start` / `travel`).
+Verified by:
 ```bash
-npm run sim:regions   # asserts every region covers tiers 1–8 in fresh & salt
+npm run sim:regions   # coastal regions must cover tiers 1–8 fresh & salt; central = higher-tier
 ```
 
 > The dev tier/water/hole selectors are gated behind `import.meta.env.DEV`;
@@ -164,5 +172,21 @@ brutal end-game chase even with the best line — verified by:
 npm run sim:gear   # gear-unlock curve per line tier + economy affordability
 ```
 
-> Next up: boats + travel (unlock the locked 🔒 boat spots & gray regions), bait,
-> then Colyseus multiplayer for the PRD's real-time dock occupancy.
+## Boats — `src/game/gear.ts` (BOAT_TIERS) + `src/world/BoatScene.tsx`
+Buy a boat in the shop (**4 tiers**: Jon Boat = lake-only/slow → Offshore Cruiser
+= fast/ocean) to reach the deep-water spots. Tapping a **lake/beach/pier** POI
+opens a **foot-or-boat menu**: *fish on foot* (a single shore spot, cheaper) or
+*take the boat out* — a **top-down driving view** ([BoatScene](src/world/BoatScene.tsx))
+where you steer with the virtual stick to buoys and tap **Fish here**. Rivers &
+streams are foot-only. The boat option is gated by `player.canBoat(water)` (lake
+needs any boat; ocean needs an ocean-capable boat).
+
+Each fishing session charges a **fishing fee** (`fishFee(quality, byBoat)`, boat
+≈ foot×3) — a sink on top of region travel; one average catch covers it so a
+session stays net-positive. Boat ownership persists. Verified by:
+```bash
+npm run sim:boat   # boat tiers, fee table, fee-vs-catch-value sanity
+```
+
+> Next up: bait economy, boat upgrades (radar/maintenance, PRD), then Colyseus
+> multiplayer for the PRD's real-time dock occupancy.

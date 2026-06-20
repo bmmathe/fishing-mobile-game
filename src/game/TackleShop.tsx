@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore, type CSSProperties } from "react";
-import { LINE_TIERS, POLE_TIERS } from "./gear";
+import { BOAT_TIERS, LINE_TIERS, POLE_TIERS } from "./gear";
 import type { PlayerStore } from "./playerStore";
 
 /** The Tackle Shop: sell your catch and buy gear upgrades. Reached from the map. */
@@ -78,6 +78,13 @@ function GearTab({ store }: { store: PlayerStore }) {
         currency={store.currency}
         onBuy={() => store.buyPole()}
       />
+      <GearTrack
+        label="Boat — drive the water to deep-water spots"
+        tiers={BOAT_TIERS.map((t) => ({ name: t.name, stat: `${t.ocean ? "lake + ocean" : "lake only"} · speed ${t.speed.toFixed(1)}`, price: t.price }))}
+        owned={store.boatTier}
+        currency={store.currency}
+        onBuy={() => store.buyBoat()}
+      />
     </div>
   );
 }
@@ -91,11 +98,11 @@ function GearTrack({
 }: {
   label: string;
   tiers: { name: string; stat: string; price: number }[];
-  owned: number;
+  owned: number; // -1 = nothing owned yet (boats)
   currency: number;
   onBuy: () => void;
 }) {
-  const cur = tiers[owned];
+  const cur = owned >= 0 ? tiers[owned] : null;
   const next = tiers[owned + 1];
   const affordable = next && currency >= next.price;
   return (
@@ -103,8 +110,8 @@ function GearTrack({
       <div style={ui.trackLabel}>{label}</div>
       <div style={ui.trackRow}>
         <div>
-          <div style={{ fontWeight: 700 }}>{cur.name}</div>
-          <div style={ui.sub}>Equipped · {cur.stat}</div>
+          <div style={{ fontWeight: 700 }}>{cur ? cur.name : "None owned"}</div>
+          <div style={ui.sub}>{cur ? `Equipped · ${cur.stat}` : "Buy one to get on the water"}</div>
         </div>
         {next ? (
           <button

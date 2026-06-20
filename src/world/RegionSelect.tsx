@@ -9,11 +9,23 @@ import { Fish, Lake, Mountain, OilDerrick, PalmTree, PineTree } from "./MapDecor
 const DEPTH = 0.5; // region slab thickness (low-poly)
 
 /**
- * Level 1 of the overworld: a stylized low-poly US silhouette partitioned into
- * the 4 regions, each a pastel area with boundary lines. Tap a region to zoom
- * into its spot map. (Geographic accuracy is cosmetic.)
+ * Level 1 of the overworld: a stylized low-poly US silhouette of 8 pastel
+ * regions with boundary lines. Two modes:
+ *  - "start": pick a free coastal spawn (central regions locked).
+ *  - "travel": move to any region for its travel cost (current = "you are here",
+ *    unaffordable = locked). (Geographic accuracy is cosmetic.)
  */
-export function RegionSelect({ onPick }: { onPick: (regionId: string) => void }) {
+export function RegionSelect({
+  mode,
+  currentRegionId,
+  currency,
+  onSelect,
+}: {
+  mode: "start" | "travel";
+  currentRegionId: string | null;
+  currency: number;
+  onSelect: (regionId: string) => void;
+}) {
   return (
     <>
       <Canvas
@@ -45,7 +57,14 @@ export function RegionSelect({ onPick }: { onPick: (regionId: string) => void })
         </mesh>
 
         {REGIONS.map((r) => (
-          <RegionArea key={r.id} region={r} onPick={onPick} />
+          <RegionArea
+            key={r.id}
+            region={r}
+            mode={mode}
+            currentRegionId={currentRegionId}
+            currency={currency}
+            onSelect={onSelect}
+          />
         ))}
 
         <MapDecorations />
@@ -55,15 +74,44 @@ export function RegionSelect({ onPick }: { onPick: (regionId: string) => void })
 
       <div style={overlay.title}>
         <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>United States</h1>
-        <p style={{ fontSize: 13, opacity: 0.8, margin: "2px 0 0" }}>Choose a region to fish</p>
+        <p style={{ fontSize: 13, opacity: 0.8, margin: "2px 0 0" }}>
+          {mode === "start" ? "Choose your starting region" : "Travel — choose a region"}
+        </p>
       </div>
     </>
   );
 }
 
-function RegionArea({ region, onPick }: { region: Region; onPick: (id: string) => void }) {
+function RegionArea({
+  region,
+  mode,
+  currentRegionId,
+  currency,
+  onSelect,
+}: {
+  region: Region;
+  mode: "start" | "travel";
+  currentRegionId: string | null;
+  currency: number;
+  onSelect: (id: string) => void;
+}) {
   const [hover, setHover] = useState(false);
-  const locked = !!region.locked;
+
+  // Per-mode interactivity, label, and lock state.
+  const isCurrent = mode === "travel" && region.id === currentRegionId;
+  let locked: boolean;
+  let labelText: string;
+  if (mode === "start") {
+    locked = !!region.central; // central regions aren't valid spawns
+    labelText = locked ? `🔒 ${region.name}` : region.name;
+  } else if (isCurrent) {
+    locked = false;
+    labelText = `📍 ${region.name}`;
+  } else {
+    const affordable = currency >= region.travelCost;
+    locked = !affordable;
+    labelText = `${affordable ? "" : "🔒 "}${region.name} · $${region.travelCost.toLocaleString()}`;
+  }
 
   // Extrude the region polygon into a flat low-poly slab lying on the XZ plane.
   const geo = useMemo(() => {
@@ -89,6 +137,8 @@ function RegionArea({ region, onPick }: { region: Region; onPick: (id: string) =
 
   const [cx, cz] = region.pos;
   const active = hover && !locked;
+  // Gray when locked; the current region pops; otherwise its pastel.
+  const displayColor = locked ? "#b9bdbd" : region.color;
 
   // Locked regions: no interaction, no hover lift, muted label.
   const handlers = locked
@@ -96,7 +146,7 @@ function RegionArea({ region, onPick }: { region: Region; onPick: (id: string) =
     : {
         onClick: (e: { stopPropagation: () => void }) => {
           e.stopPropagation();
-          onPick(region.id);
+          onSelect(region.id);
         },
         onPointerOver: (e: { stopPropagation: () => void }) => {
           e.stopPropagation();
@@ -110,23 +160,21 @@ function RegionArea({ region, onPick }: { region: Region; onPick: (id: string) =
       };
 
   return (
-    <group position={[0, active ? 0.22 : 0, 0]}>
+    <group position={[0, active || isCurrent ? 0.22 : 0, 0]}>
       <mesh geometry={geo} castShadow receiveShadow {...handlers}>
         <meshStandardMaterial
-          color={region.color}
+          color={displayColor}
           flatShading
           roughness={1}
-          emissive="#ffffff"
-          emissiveIntensity={active ? 0.12 : 0}
+          emissive={isCurrent ? "#fff3c4" : "#ffffff"}
+          emissiveIntensity={isCurrent ? 0.22 : active ? 0.12 : 0}
         />
       </mesh>
 
-      <Line points={outline} color="#f6f1e6" lineWidth={locked ? 1.5 : 2.5} />
+      <Line points={outline} color={isCurrent ? "#f4c453" : "#f6f1e6"} lineWidth={locked ? 1.5 : isCurrent ? 3.5 : 2.5} />
 
       <Html position={[cx, DEPTH + 0.7, cz]} center distanceFactor={26} style={{ pointerEvents: "none" }}>
-        <div style={{ ...overlay.pinLabel, ...(locked ? overlay.lockedLabel : null) }}>
-          {locked ? `🔒 ${region.name}` : region.name}
-        </div>
+        <div style={{ ...overlay.pinLabel, ...(locked ? overlay.lockedLabel : null) }}>{labelText}</div>
       </Html>
     </group>
   );

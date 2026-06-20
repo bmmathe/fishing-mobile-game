@@ -19,11 +19,26 @@ const BODY_LABEL: Record<string, string> = {
   offshore: "Offshore",
 };
 
-/** DOM overlay shown when a map POI is tapped. */
-export function SpotCard({ spot, onFish, onClose }: { spot: Spot; onFish: (s: Spot) => void; onClose: () => void }) {
+/** DOM overlay shown when a land POI is tapped: fish on foot or take the boat out. */
+export function SpotCard({
+  spot,
+  footFee,
+  offersBoat,
+  canBoat,
+  onFishFoot,
+  onBoat,
+  onClose,
+}: {
+  spot: Spot;
+  footFee: number;
+  offersBoat: boolean;
+  canBoat: boolean;
+  onFishFoot: (s: Spot) => void;
+  onBoat: (s: Spot) => void;
+  onClose: () => void;
+}) {
   const tiers = spot.tiers.map((t) => t.tier);
   const tierRange = `T${Math.min(...tiers)}–T${Math.max(...tiers)}`;
-  const locked = spot.access === "boat";
 
   return (
     <div style={card.backdrop} onClick={onClose}>
@@ -38,13 +53,22 @@ export function SpotCard({ spot, onFish, onClose }: { spot: Spot; onFish: (s: Sp
           </div>
         </div>
         <p style={card.blurb}>{spot.blurb}</p>
-        {locked ? (
-          <div style={card.locked}>🔒 Requires a boat</div>
-        ) : (
-          <button style={card.fishBtn} onClick={() => onFish(spot)}>
-            Fish here
-          </button>
-        )}
+
+        <button style={card.fishBtn} onClick={() => onFishFoot(spot)}>
+          Fish on foot · ${footFee}
+        </button>
+
+        {offersBoat &&
+          (canBoat ? (
+            <button style={{ ...card.fishBtn, background: "#5aa9bd" }} onClick={() => onBoat(spot)}>
+              🚤 Take the boat out
+            </button>
+          ) : (
+            <div style={card.locked}>
+              🔒 Take the boat out — needs {spot.water === "salt" ? "an ocean-capable" : "a"} boat
+            </div>
+          ))}
+
         <button style={card.closeBtn} onClick={onClose}>
           Back to map
         </button>

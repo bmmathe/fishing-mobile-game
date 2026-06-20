@@ -25,6 +25,15 @@ export interface PoleTier {
   price: number;
 }
 
+export interface BoatTier {
+  name: string;
+  price: number;
+  /** Drive speed in the boat view (world units/sec base). */
+  speed: number;
+  /** Whether this boat can go out on the ocean (T1 is lake-only). */
+  ocean: boolean;
+}
+
 // maxTension steps are calibrated against the fight model (see npm run sim:gear):
 // each tier opens roughly the next fish-tier band; the top line makes T8 a
 // brutal-but-possible catch. (Tension scales steeply for the big fish.)
@@ -44,6 +53,14 @@ export const POLE_TIERS: PoleTier[] = [
   { name: "Game Reel", reelMult: 2.1, price: 14000 },
 ];
 
+// 4 boats: T1 is lake-only & slow; higher tiers are faster and ocean-capable.
+export const BOAT_TIERS: BoatTier[] = [
+  { name: "Jon Boat", price: 2500, speed: 1.0, ocean: false },
+  { name: "Bass Boat", price: 8000, speed: 1.4, ocean: true },
+  { name: "Center Console", price: 25000, speed: 1.85, ocean: true },
+  { name: "Offshore Cruiser", price: 70000, speed: 2.4, ocean: true },
+];
+
 /** Base sell value per tier (before the weight bonus). */
 const TIER_BASE = [0, 3, 8, 20, 50, 120, 320, 750, 1700];
 
@@ -56,4 +73,15 @@ export function fishValue(tier: number, weightKg: number): number {
   // Weight bonus saturates so giant outliers don't explode the economy.
   const wBonus = 0.7 + 0.3 * Math.min(1, Math.log10(1 + weightKg) / 2);
   return Math.max(1, Math.round(base * wBonus));
+}
+
+/**
+ * Per-session fishing fee, scaled by spot quality. Boat fishing costs ~3× foot
+ * (and boat spots are higher quality, so it's pricier both ways). One fee covers
+ * a whole session (you can re-cast/land many fish), so it stays a net sink, not
+ * a per-catch tax. Tuned via `npm run sim:boat`.
+ */
+const FOOT_FEE: Record<string, number> = { D: 3, C: 6, B: 15, A: 35, S: 70 };
+export function fishFee(quality: string, byBoat: boolean): number {
+  return (FOOT_FEE[quality] ?? 6) * (byBoat ? 3 : 1);
 }

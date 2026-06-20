@@ -10,16 +10,26 @@ import type { Region, Spot } from "./regions";
  * ocean on the east; each fishing spot is a tappable POI pin. Tapping opens a
  * SpotCard → "Fish here" enters the fishing scene.
  */
+const BOAT_BODIES = ["lake", "beach", "pier"]; // land spots that also offer a boat launch
+
 export function RegionMap({
   region,
-  onBack,
-  onFish,
+  onTravel,
+  onFishFoot,
+  onBoat,
+  canBoat,
+  footFeeFor,
 }: {
   region: Region;
-  onBack: () => void;
-  onFish: (spot: Spot) => void;
+  onTravel: () => void;
+  onFishFoot: (spot: Spot) => void;
+  onBoat: (spot: Spot) => void;
+  canBoat: (water: "fresh" | "salt") => boolean;
+  footFeeFor: (spot: Spot) => number;
 }) {
   const [selected, setSelected] = useState<Spot | null>(null);
+  // Only land spots are pins; deep/offshore spots live in the boat view.
+  const landSpots = region.spots.filter((s) => s.access === "land");
 
   return (
     <>
@@ -51,8 +61,8 @@ export function RegionMap({
           <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
         </mesh>
 
-        {/* Small water-body cues under fresh spots */}
-        {region.spots
+        {/* Small water-body cues under fresh land spots */}
+        {landSpots
           .filter((s) => s.water === "fresh")
           .map((s) => (
             <mesh key={`wb-${s.id}`} position={[s.pos[0], 0.32, s.pos[1]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
@@ -61,7 +71,7 @@ export function RegionMap({
             </mesh>
           ))}
 
-        {region.spots.map((s) => (
+        {landSpots.map((s) => (
           <SpotPin key={s.id} spot={s} onSelect={setSelected} />
         ))}
 
@@ -75,13 +85,23 @@ export function RegionMap({
       </Canvas>
 
       <div style={ui.header}>
-        <button style={ui.backBtn} onClick={onBack}>
-          ← USA
+        <button style={ui.backBtn} onClick={onTravel}>
+          🗺 Travel
         </button>
         <div style={ui.regionName}>{region.name}</div>
       </div>
 
-      {selected && <SpotCard spot={selected} onFish={onFish} onClose={() => setSelected(null)} />}
+      {selected && (
+        <SpotCard
+          spot={selected}
+          footFee={footFeeFor(selected)}
+          offersBoat={BOAT_BODIES.includes(selected.body)}
+          canBoat={canBoat(selected.water)}
+          onFishFoot={onFishFoot}
+          onBoat={onBoat}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </>
   );
 }

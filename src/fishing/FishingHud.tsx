@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useSyncExternalStore, type CSSProperties } from "react";
 import type { FishingStore } from "./fishingStore";
 import { TIERS, getTier, type Water } from "./fishCatalog";
-
-const STICK_R = 68; // px radius of the control pad
+import { Stick } from "../ui/Stick";
 
 // Difficulty ramp across the 8 tiers (green → red) + a label per tier.
 const TIER_COLORS = ["#6fae74", "#8fbf64", "#c9c24f", "#e8b24a", "#e8934a", "#e0743f", "#d4564f", "#a8343c"];
@@ -127,7 +126,7 @@ export function FishingHud({ store, onExit }: { store: FishingStore; onExit?: ()
         ) : waiting ? (
           <WaitPanel store={store} />
         ) : (
-          <Stick store={store} />
+          <ReelStick store={store} />
         )}
       </div>
     </div>
@@ -236,53 +235,18 @@ function CastPanel({ store }: { store: FishingStore }) {
   );
 }
 
-/** Drag-to-reel (pull down) + steer (left/right) virtual stick. */
-function Stick({ store }: { store: FishingStore }) {
-  const padRef = useRef<HTMLDivElement>(null);
-  const [knob, setKnob] = useState({ x: 0, y: 0 });
-  const active = useRef(false);
-
-  const update = (clientX: number, clientY: number) => {
-    const pad = padRef.current;
-    if (!pad) return;
-    const r = pad.getBoundingClientRect();
-    let dx = clientX - (r.left + r.width / 2);
-    let dy = clientY - (r.top + r.height / 2);
-    const len = Math.hypot(dx, dy);
-    if (len > STICK_R) {
-      dx = (dx / len) * STICK_R;
-      dy = (dy / len) * STICK_R;
-    }
-    setKnob({ x: dx, y: dy });
-    store.setSteer(dx / STICK_R);
-    store.setReel(Math.max(0, dy / STICK_R)); // pull DOWN to reel in
-  };
-
+/** Drag-to-reel (pull down) + steer (left/right) control. */
+function ReelStick({ store }: { store: FishingStore }) {
   return (
-    <div
-      ref={padRef}
-      style={ui.stickPad}
-      onPointerDown={(e) => {
-        active.current = true;
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-        store.tapHook(); // engaging sets the hook during a bite
-        update(e.clientX, e.clientY);
+    <Stick
+      hint="reel ↓ · steer ←→"
+      onStart={() => store.tapHook()} // engaging sets the hook during a bite
+      onMove={(x, y) => {
+        store.setSteer(x);
+        store.setReel(Math.max(0, y)); // pull DOWN to reel in
       }}
-      onPointerMove={(e) => active.current && update(e.clientX, e.clientY)}
-      onPointerUp={() => {
-        active.current = false;
-        setKnob({ x: 0, y: 0 });
-        store.releaseInput();
-      }}
-      onPointerCancel={() => {
-        active.current = false;
-        setKnob({ x: 0, y: 0 });
-        store.releaseInput();
-      }}
-    >
-      <div style={ui.stickHint}>reel ↓ · steer ←→</div>
-      <div style={{ ...ui.stickKnob, transform: `translate(${knob.x}px, ${knob.y}px)` }} />
-    </div>
+      onRelease={() => store.releaseInput()}
+    />
   );
 }
 
@@ -324,7 +288,4 @@ const ui: Record<string, CSSProperties> = {
   tierLabel: { fontSize: 14, fontWeight: 700 },
   tierBlurb: { fontSize: 11, opacity: 0.75, maxWidth: 264, textAlign: "center" },
   castBtn: { pointerEvents: "auto", border: "none", borderRadius: 24, padding: "11px 38px", fontSize: 17, fontWeight: 700, color: "#fff", background: "#5aa9bd", boxShadow: "0 4px 12px rgba(0,0,0,0.2)", cursor: "pointer", marginTop: 2 },
-  stickPad: { pointerEvents: "auto", position: "relative", width: STICK_R * 2, height: STICK_R * 2, borderRadius: "50%", background: "rgba(255,255,255,0.35)", border: "2px solid rgba(255,255,255,0.6)", touchAction: "none", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.12)" },
-  stickHint: { position: "absolute", fontSize: 10, opacity: 0.7, fontWeight: 600, pointerEvents: "none" },
-  stickKnob: { width: 56, height: 56, borderRadius: "50%", background: "rgba(90,169,189,0.9)", boxShadow: "0 2px 8px rgba(0,0,0,0.25)", pointerEvents: "none" },
 };

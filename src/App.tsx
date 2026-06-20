@@ -3,20 +3,26 @@ import { createDefaultStore } from "./fishing/fishingStore";
 import { FishingGame } from "./fishing/FishingGame";
 import { RegionSelect } from "./world/RegionSelect";
 import { RegionMap } from "./world/RegionMap";
+import { BoatScene } from "./world/BoatScene";
 import { getRegion, type Spot } from "./world/regions";
 import { createPlayerStore } from "./game/playerStore";
+import { fishFee } from "./game/gear";
 import { TackleShop } from "./game/TackleShop";
+import type { Water } from "./fishing/fishCatalog";
 
-type View = "region-select" | "region-map" | "fishing" | "shop";
+// Views: region-map (your region) · travel (full US) · boat (drive the water) ·
+// fishing (the catch minigame) · shop (sell + gear/boats).
+type View = "region-map" | "travel" | "fishing" | "shop" | "boat";
 
 export default function App() {
   const [store] = useState(createDefaultStore);
   const [player] = useState(createPlayerStore);
-  const [view, setView] = useState<View>("region-select");
-  const [regionId, setRegionId] = useState<string | null>(null);
-  const [shopReturn, setShopReturn] = useState<View>("region-select");
+  const [view, setView] = useState<View>("region-map");
+  const [shopReturn, setShopReturn] = useState<View>("region-map");
+  const [boatWater, setBoatWater] = useState<Water>("fresh");
+  const [fishingReturn, setFishingReturn] = useState<View>("region-map");
 
-  // Re-render when player gear/currency changes.
+  // Re-render when player state (currency, gear, location) changes.
   useSyncExternalStore(player.subscribe, player.getVersion);
 
   // Bank every landed (non-junk) fish into the player inventory.
@@ -37,39 +43,84 @@ export default function App() {
     const w = window as unknown as { fishStore: typeof store; player: typeof player; nav: object };
     w.fishStore = store;
     w.player = player;
-    w.nav = { setView, setRegionId };
+    w.nav = { setView };
   }
 
-  const openShop = () => {
-    setShopReturn(view === "region-map" ? "region-map" : "region-select");
-    setView("shop");
-  };
-
-  const onMap = view === "region-select" || view === "region-map";
-
-  return (
-    <Suspense fallback={null}>
-      {view === "region-select" && (
+  // No region chosen yet → starting picker (free coastal spawn).
+  if (player.currentRegionId === null) {
+    return (
+      <Suspense fallback={null}>
         <RegionSelect
-          onPick={(id) => {
-            setRegionId(id);
+          mode="start"
+          currentRegionId={null}
+          currency={player.currency}
+          onSelect={(id) => {
+            player.startIn(id);
             setView("region-map");
           }}
         />
-      )}
+      </Suspense>
+    );
+  }
 
-      {view === "region-map" && regionId && (
+  const region = getRegion(player.currentRegionId);
+  const openShop = () => {
+    setShopReturn(view === "travel" ? "travel" : "region-map");
+    setView("shop");
+  };
+  const onMap = view === "region-map" || view === "travel";
+
+  return (
+    <Suspense fallback={null}>
+      {view === "region-map" && (
         <RegionMap
-          region={getRegion(regionId)}
-          onBack={() => setView("region-select")}
-          onFish={(spot: Spot) => {
-            store.setSpot(spot);
-            setView("fishing");
+          region={region}
+          onTravel={() => setView("travel")}
+          canBoat={(water) => player.canBoat(water)}
+          footFeeFor={(spot) => fishFee(spot.quality, false)}
+          onFishFoot={(spot: Spot) => {
+            if (player.payFishFee(fishFee(spot.quality, false))) {
+              store.setSpot(spot);
+              setFishingReturn("region-map");
+              setView("fishing");
+            }
+          }}
+          onBoat={(spot: Spot) => {
+            setBoatWater(spot.water);
+            setView("boat");
           }}
         />
       )}
 
-      {view === "fishing" && <FishingGame store={store} onExit={() => setView("region-map")} />}
+      {view === "boat" && (
+        <BoatScene
+          region={region}
+          water={boatWater}
+          boatSpeed={player.boatSpeed}
+          currency={player.currency}
+          onFish={(spot: Spot) => {
+            if (player.payFishFee(fishFee(spot.quality, true))) {
+              store.setSpot(spot);
+              setFishingReturn("boat");
+              setView("fishing");
+            }
+          }}
+          onDock={() => setView("region-map")}
+        />
+      )}
+
+      {view === "travel" && (
+        <RegionSelect
+          mode="travel"
+          currentRegionId={player.currentRegionId}
+          currency={player.currency}
+          onSelect={(id) => {
+            if (player.travelTo(id, getRegion(id).travelCost)) setView("region-map");
+          }}
+        />
+      )}
+
+      {view === "fishing" && <FishingGame store={store} onExit={() => setView(fishingReturn)} />}
 
       {view === "shop" && <TackleShop store={player} onBack={() => setView(shopReturn)} />}
 
