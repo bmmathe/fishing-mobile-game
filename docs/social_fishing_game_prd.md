@@ -57,3 +57,45 @@
 1. Finalize the core fishing mechanic prototype (tension/reel minigame).
 2. Model the basic economy (Standard merchant payouts vs. Gear upgrade costs).
 3. Develop the real-time server architecture for the 10-player dock occupancy test.
+
+---
+
+## 8. Implementation Status — single-player prototype (updated 2026-06-20)
+
+The original "Next Steps" 1 & 2 are done; the full single-player loop is built. Tech stack:
+**React + TypeScript + Three.js (React Three Fiber)**, mobile-wrapped via **Ionic Capacitor**;
+state in small external stores with **localStorage** persistence; tuning validated by headless
+`npm run sim*` scripts. Detail lives in [README.md](../README.md) and
+[fish_tiers.md](fish_tiers.md).
+
+**Built**
+- **Fishing minigame** (§3.2) — skill-based drag-to-reel + steer with tension management; two
+  failure modes (line **snap** at high tiers, **shake-off** at low tiers). Not a QTE/simple bar.
+- **Cast → wait → bite → fight** — per-spot wait-to-bite distribution (hole quality S–D) with a
+  nibble tell and recast.
+- **8 fish tiers** × fresh/salt, with **bait fish** and **junk** — see [fish_tiers.md](fish_tiers.md).
+- **Overworld map** (§3.1, partial) — stylized low-poly 3D US, 8 regions; pick a free coastal start,
+  **pay to travel** between regions (central regions cost more).
+- **Locations** (§3.1) — per-region spots: **free** foot spots (stream/river/lake/beach) and **paid
+  premium** foot spots (docks/piers); a per-session **fishing fee** on premium/boat spots; a
+  **limited cooler** is the natural session limiter.
+- **Gear progression** (§3.2) — line tiers (raise the snap limit → unlock higher tiers) and pole
+  tiers (reel speed), gated by currency.
+- **Bait economy** (§3.2) — keep forage as bait; equip it to bias toward higher tiers / shorten wait.
+  Standard bait (Worms) is NPC-buyable; premium bait is catch-only.
+- **Boats & deep water** (§3.3) — 4 boat tiers (lake-only → ocean); a top-down boat-navigation view
+  to reach the boat-only deep-water spots.
+- **Economy** (§4, partial) — Standard NPC **Merchant** (sell catches & bait); currency sinks =
+  travel, gear, boats, fishing fees.
+- **Trophy Wall** (§4) — mount prized catches instead of selling. Plus a **Fishdex** (species
+  collection log with records).
+
+**Not built yet**
+- **Real-time multiplayer & occupancy** (§1, §3.1, §6) — single-player only; no server/WebSockets,
+  no live spot occupancy/timeout, no player-to-player spot trading.
+- **Auction House** (§4) — player-to-player trading; catches/bait sell to the NPC merchant only.
+- **Dynamic spot pricing** (§3.1), **boat operating costs / radar** (§3.3), **seasonal fish &
+  tournaments** (§5).
+- **Monetization** — designed to be fully free-playable; stamina/energy + premium currency are a
+  planned later "pay-to-win" layer (casual players still progress for free).
+- **Production**: never run on a physical device yet; JS bundle is &gt;1 MB (no code-splitting).

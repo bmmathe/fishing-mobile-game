@@ -15,7 +15,16 @@ import type { HoleQuality } from "../fishing/fishingHoles";
  * Verified by `npm run sim:regions`.
  */
 
-export type WaterBody = "stream" | "river" | "lake" | "deep-lake" | "beach" | "pier" | "offshore";
+export type WaterBody = "stream" | "river" | "lake" | "dock" | "deep-lake" | "beach" | "pier" | "offshore";
+
+/** Foot spots that are free to fish (the no-soft-lock safety net). */
+export const FREE_FOOT_BODIES: WaterBody[] = ["stream", "river", "lake", "beach"];
+/** Bodies whose SpotCard offers "take the boat out" (general water access). */
+export const BOAT_BODIES: WaterBody[] = ["lake", "beach"];
+
+export function isFreeFoot(body: WaterBody): boolean {
+  return FREE_FOOT_BODIES.includes(body);
+}
 
 export interface TierWeight {
   tier: number;
@@ -117,6 +126,7 @@ const BODY: Record<WaterBody, Omit<Spot, "id" | "name" | "regionId" | "blurb" | 
   stream: { water: "fresh", access: "land", quality: "C", tiers: tw([[1, 0.65], [2, 0.35]]), pos: [-6, -4] },
   river: { water: "fresh", access: "land", quality: "B", tiers: tw([[2, 0.5], [3, 0.35], [4, 0.15]]), pos: [-5, 2] },
   lake: { water: "fresh", access: "land", quality: "B", tiers: tw([[3, 0.5], [4, 0.35], [5, 0.15]]), pos: [-2, -2] },
+  dock: { water: "fresh", access: "land", quality: "A", tiers: tw([[3, 0.2], [4, 0.45], [5, 0.35]]), pos: [-1, 2.5] },
   "deep-lake": { water: "fresh", access: "boat", quality: "A", tiers: tw([[6, 0.55], [7, 0.3], [8, 0.15]]), pos: [-3, 5] },
   beach: { water: "salt", access: "land", quality: "C", tiers: tw([[1, 0.5], [2, 0.35], [3, 0.15]]), pos: [5, -3] },
   pier: { water: "salt", access: "land", quality: "B", tiers: tw([[2, 0.4], [3, 0.3], [4, 0.2], [5, 0.1]]), pos: [6, 1] },
@@ -182,6 +192,7 @@ export const REGIONS: Region[] = [
       { body: "stream", name: "Cascade Creek", blurb: "Snowmelt riffles full of little forage fish." },
       { body: "river", name: "Columbia River", blurb: "Mighty river run — trout, salmon, and steelhead." },
       { body: "lake", name: "Lake Washington", blurb: "City lake with scrappy bass and trout." },
+      { body: "dock", name: "Lake Union Docks", blurb: "Private docks over deeper water — bigger fish, small fee." },
       { body: "deep-lake", name: "Lake Roosevelt", blurb: "Vast reservoir hiding monster sturgeon.", quality: "A" },
       { body: "beach", name: "Westport Beach", blurb: "Surf-cast for forage along the Pacific sand." },
       { body: "pier", name: "Seattle Pier", blurb: "Puget Sound pier — rockfish to salmon." },
@@ -195,6 +206,7 @@ export const REGIONS: Region[] = [
       { body: "stream", name: "Sierra Creek", blurb: "High-country trickle of bait and panfish." },
       { body: "river", name: "Sacramento Delta", blurb: "Sprawling delta — stripers and sturgeon." },
       { body: "lake", name: "Clear Lake", blurb: "Legendary bass factory.", quality: "A" },
+      { body: "dock", name: "Tahoe Boat Docks", blurb: "Deep-water docks — premium lake fishing for a fee." },
       { body: "deep-lake", name: "Lake Shasta", blurb: "Deep, cold, and full of giants." },
       { body: "beach", name: "Huntington Beach", blurb: "Classic SoCal surf fishing." },
       { body: "pier", name: "Santa Monica Pier", blurb: "Iconic pier over the kelp." },
@@ -208,6 +220,7 @@ export const REGIONS: Region[] = [
       { body: "stream", name: "Caddo Creek", blurb: "Cypress-shaded creek of minnows." },
       { body: "river", name: "Atchafalaya Bayou", blurb: "Sprawling swamp — catfish country." },
       { body: "lake", name: "Lake Fork", blurb: "The bass capital of Texas.", quality: "A" },
+      { body: "dock", name: "Lake Fork Docks", blurb: "Pay the dock fee for the lake's best water." },
       { body: "deep-lake", name: "Sam Rayburn", blurb: "Big reservoir, bigger fish." },
       { body: "beach", name: "Galveston Beach", blurb: "Gulf surf for croaker and reds." },
       { body: "pier", name: "Gulf Shores Pier", blurb: "Long pier into warm water." },
@@ -221,6 +234,7 @@ export const REGIONS: Region[] = [
       { body: "stream", name: "Spring Creek", blurb: "Crystal spring run teeming with bait." },
       { body: "river", name: "St. Johns River", blurb: "Slow tannic river — bass and panfish." },
       { body: "lake", name: "Lake Okeechobee", blurb: "The Big O — famous for giant bass.", quality: "A" },
+      { body: "dock", name: "Okeechobee Docks", blurb: "Rim-canal docks over prime bass water." },
       { body: "deep-lake", name: "Okeechobee Deep", blurb: "Open-water trolling for the biggest." },
       { body: "beach", name: "Cocoa Beach", blurb: "Atlantic surf and pompano." },
       { body: "pier", name: "Naples Pier", blurb: "Gulf-side pier sunsets and snook." },
@@ -236,6 +250,7 @@ export const REGIONS: Region[] = [
       { body: "river", name: "Snake River", blurb: "Cold, fast water — trout and pike.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-5, 2] },
       { body: "lake", name: "Flathead Lake", blurb: "Huge alpine lake of lake trout.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-1, -2] },
       { body: "lake", name: "Alpine Tarn", blurb: "Glacial pool, surprisingly toothy.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-6, -3.5] },
+      { body: "dock", name: "Flathead Marina", blurb: "Premium dock over the deep channel.", tiers: [[4, 0.4], [5, 0.6]], pos: [-1, 2.5] },
       { body: "deep-lake", name: "Glacier Depths", blurb: "Sunless deep — true giants.", quality: "A", pos: [-3, 5] },
     ],
   }),
@@ -246,6 +261,7 @@ export const REGIONS: Region[] = [
       { body: "river", name: "Missouri River", blurb: "Wide and slow — flathead country.", tiers: [[3, 0.4], [4, 0.4], [5, 0.2]], pos: [-5, 1] },
       { body: "lake", name: "Lake Oahe", blurb: "Vast reservoir — walleye and pike.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-2, -2] },
       { body: "lake", name: "Farm Reservoir", blurb: "Quiet water, fat bass.", tiers: [[3, 0.5], [4, 0.4], [5, 0.1]], pos: [-6, -3] },
+      { body: "dock", name: "Oahe Marina", blurb: "Pay-to-fish dock over the old river channel.", tiers: [[4, 0.4], [5, 0.6]], pos: [-1, 2.5] },
       { body: "deep-lake", name: "Oahe Deep", blurb: "Open-water trolling for monsters.", quality: "A", pos: [-3, 5] },
     ],
   }),
@@ -256,6 +272,7 @@ export const REGIONS: Region[] = [
       { body: "lake", name: "Lake Michigan", blurb: "Inland sea of salmon and trout.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-5, -2] },
       { body: "lake", name: "Lake Erie", blurb: "Walleye capital of the world.", tiers: [[4, 0.45], [5, 0.4], [3, 0.15]], pos: [-1, 0] },
       { body: "river", name: "Mississippi Headwaters", blurb: "Where the great river begins.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-6, 2.5] },
+      { body: "dock", name: "Chicago Harbor", blurb: "Big-water harbor dock for a fee.", tiers: [[4, 0.4], [5, 0.6]], pos: [-2, -4] },
       { body: "deep-lake", name: "Superior Deep", blurb: "Cold, black, and bottomless.", quality: "S", pos: [-3, 5] },
     ],
   }),
@@ -264,6 +281,7 @@ export const REGIONS: Region[] = [
     blurb: "Storied rivers and the cold Atlantic coast.",
     spots: [
       { body: "river", name: "Hudson River", blurb: "Tidal river — stripers and shad.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-4, 1] },
+      { body: "dock", name: "Champlain Docks", blurb: "Lakeside docks for a fee — lake trout & pike.", tiers: [[4, 0.4], [5, 0.6]], pos: [-2, -3] },
       { body: "beach", name: "Montauk Point", blurb: "The surfcasting mecca.", quality: "A", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [5, -3] },
       { body: "pier", name: "Cape Cod Pier", blurb: "Cold-water blues and bass.", tiers: [[3, 0.4], [4, 0.35], [5, 0.25]], pos: [6, 1] },
       { body: "offshore", name: "Georges Bank", blurb: "Legendary cod & tuna grounds.", quality: "S", pos: [7, 4] },

@@ -3,17 +3,16 @@ import { Canvas } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
 import { palette } from "../scene/palette";
 import { SpotCard } from "./SpotCard";
-import type { Region, Spot } from "./regions";
+import { BOAT_BODIES, type Region, type Spot } from "./regions";
 
 /**
  * Level 2 of the overworld: a low-poly diorama of one region. Land on the west,
  * ocean on the east; each fishing spot is a tappable POI pin. Tapping opens a
  * SpotCard → "Fish here" enters the fishing scene.
  */
-const BOAT_BODIES = ["lake", "beach", "pier"]; // land spots that also offer a boat launch
-
 export function RegionMap({
   region,
+  currency,
   onTravel,
   onFishFoot,
   onBoat,
@@ -21,6 +20,7 @@ export function RegionMap({
   footFeeFor,
 }: {
   region: Region;
+  currency: number;
   onTravel: () => void;
   onFishFoot: (spot: Spot) => void;
   onBoat: (spot: Spot) => void;
@@ -95,6 +95,7 @@ export function RegionMap({
         <SpotCard
           spot={selected}
           footFee={footFeeFor(selected)}
+          currency={currency}
           offersBoat={BOAT_BODIES.includes(selected.body)}
           canBoat={canBoat(selected.water)}
           onFishFoot={onFishFoot}

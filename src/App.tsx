@@ -4,8 +4,8 @@ import { FishingGame } from "./fishing/FishingGame";
 import { RegionSelect } from "./world/RegionSelect";
 import { RegionMap } from "./world/RegionMap";
 import { BoatScene } from "./world/BoatScene";
-import { getRegion, type Spot } from "./world/regions";
-import { createPlayerStore } from "./game/playerStore";
+import { getRegion, isFreeFoot, type Spot } from "./world/regions";
+import { createPlayerStore, COOLER_CAP } from "./game/playerStore";
 import { fishFee } from "./game/gear";
 import { TackleShop } from "./game/TackleShop";
 import { Collection } from "./game/Collection";
@@ -100,11 +100,13 @@ export default function App() {
       {view === "region-map" && (
         <RegionMap
           region={region}
+          currency={player.currency}
           onTravel={() => setView("travel")}
           canBoat={(water) => player.canBoat(water)}
-          footFeeFor={(spot) => fishFee(spot.quality, false)}
+          footFeeFor={(spot) => (isFreeFoot(spot.body) ? 0 : fishFee(spot.quality, false))}
           onFishFoot={(spot: Spot) => {
-            if (player.payFishFee(fishFee(spot.quality, false))) {
+            const fee = isFreeFoot(spot.body) ? 0 : fishFee(spot.quality, false);
+            if (player.payFishFee(fee)) {
               store.setSpot(spot);
               setFishingReturn("region-map");
               setView("fishing");
@@ -145,7 +147,14 @@ export default function App() {
         />
       )}
 
-      {view === "fishing" && <FishingGame store={store} onExit={() => setView(fishingReturn)} bait={baitBar} />}
+      {view === "fishing" && (
+        <FishingGame
+          store={store}
+          onExit={() => setView(fishingReturn)}
+          bait={baitBar}
+          cooler={{ count: player.inventory.length, cap: COOLER_CAP, full: player.coolerFull }}
+        />
+      )}
 
       {view === "shop" && <TackleShop store={player} onBack={() => setView(shopReturn)} />}
 

@@ -13,6 +13,7 @@ const BODY_LABEL: Record<string, string> = {
   stream: "Stream",
   river: "River",
   lake: "Lake",
+  dock: "Dock",
   "deep-lake": "Deep Lake",
   beach: "Beach",
   pier: "Pier",
@@ -23,6 +24,7 @@ const BODY_LABEL: Record<string, string> = {
 export function SpotCard({
   spot,
   footFee,
+  currency,
   offersBoat,
   canBoat,
   onFishFoot,
@@ -31,6 +33,7 @@ export function SpotCard({
 }: {
   spot: Spot;
   footFee: number;
+  currency: number;
   offersBoat: boolean;
   canBoat: boolean;
   onFishFoot: (s: Spot) => void;
@@ -39,6 +42,7 @@ export function SpotCard({
 }) {
   const tiers = spot.tiers.map((t) => t.tier);
   const tierRange = `T${Math.min(...tiers)}–T${Math.max(...tiers)}`;
+  const canAffordFoot = footFee === 0 || currency >= footFee;
 
   return (
     <div style={card.backdrop} onClick={onClose}>
@@ -54,9 +58,13 @@ export function SpotCard({
         </div>
         <p style={card.blurb}>{spot.blurb}</p>
 
-        <button style={card.fishBtn} onClick={() => onFishFoot(spot)}>
-          Fish on foot · ${footFee}
-        </button>
+        {canAffordFoot ? (
+          <button style={card.fishBtn} onClick={() => onFishFoot(spot)}>
+            Fish on foot · {footFee === 0 ? "Free" : `$${footFee}`}
+          </button>
+        ) : (
+          <div style={card.locked}>🔒 Not enough money to fish here (${footFee})</div>
+        )}
 
         {offersBoat &&
           (canBoat ? (

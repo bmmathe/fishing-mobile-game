@@ -19,8 +19,9 @@ A catch is described by three independent properties:
   `lake-generic`, `lake-westcoast`, `lake-eastcoast`, `river`, `south-us`,
   `ocean-beach`, `ocean-pier`, `ocean-inshore`, `ocean-bluewater`.
 
-**Access** gates the high end: tiers **6–8 are boat-only** and can't be reached from land. They
-are shown locked (🔒) in the UI until boats exist.
+**Access** gates the high end: tiers **6–8 are boat-only** and can't be reached from land — you
+reach them by buying a boat and driving out to the deep-water spots (see the boat view). Tiers 1–5
+are land/foot.
 
 ## 2. Two failure modes (why the curve is smooth)
 
@@ -50,8 +51,8 @@ Validated by `npm run sim` (a near-optimal bot ≈ a skilled player). Real playe
 | 7 | Big Game | ~0%¹ | 0% | **boat** | snap |
 | 8 | Legendary | ~0%¹ | 0% | **boat** | snap |
 
-¹ Tiers 6–8 are intended to be **impossible on the starter line** — they require gear upgrades
-(a stronger line raises the snap limit). See §6.
+¹ Tiers 6–8 are **impossible on the starter line** — they require **line upgrades** (a stronger line
+raises the snap limit) *and* a **boat** to reach the deep-water spots. See §6.
 
 ## 4. Difficulty parameters per tier
 
@@ -158,20 +159,26 @@ Legend: **🪱 bait** (→ tiers it lures) · **🗑 junk** (trivial reel-in) ·
 
 ---
 
-## 6. Bait & gear gating (future systems — data only today)
+## 6. Bait & gear gating (implemented)
 
-These systems are **not implemented yet**; the catalog only carries the data they'll consume.
+These systems are **built** and consume the catalog data. (Details in the README; data/logic in
+[`src/game/`](../src/game/).)
 
-- **Bait chains** (`bait.forTiers`): forage fish from a lower tier lure higher tiers.
+- **Bait chains** ([bait.ts](../src/game/bait.ts), `bait.forTiers`): keep a caught forage fish as
+  bait, then equip it to **raise the odds of hooking the higher tiers it lures** (`tierBoost` weights
+  those tiers in the spot's roll) and/or **shorten the wait** (`waitFactor`). Independent per bait.
   - Freshwater: T1 minnows/shiners → T2–3 · T2 shad → T3–4 · **T3 cisco/alewife → T6–8**
   - Saltwater: T1 anchovy/sand-eel → T2–3 · T2 menhaden/sardine → T3–5 · **T3 goggle-eye/threadfin → T7–8**
-  - Intended effect (future): bait raises the *likelihood of hooking* a higher-tier fish and shortens
-    wait times — it does **not** make reeling easier.
-- **Gear / line** (`recommendedLine` per fish, `baseLine` per tier): the starter line is deliberately
-  weak (`maxTension 0.78`). Upgraded poles/lines raise `maxTension`, which **eases reeling** and is the
-  lever that turns the ~0% tier 6–8 fish into catchable ones (PRD: high-tier fish snap low-tier lines).
-- **Travel / locations** (`locations` tags): a future map + travel mechanic gates which species appear
-  where (e.g. a mythical fish only in a specific west-coast lake, or only reachable by boat from a pier).
+  - Bait does **not** make reeling easier (gear does). Validate: `npm run sim:bait`.
+- **Gear: line + pole** ([gear.ts](../src/game/gear.ts) `LINE_TIERS`/`POLE_TIERS`): the starter line
+  is deliberately weak (`maxTension 0.78`); buying **line tiers** raises `maxTension`, the lever that
+  unlocks the ~0% tier 6–8 fish (line steps 0.78 → 10). **Pole tiers** raise reel speed. Validate:
+  `npm run sim:gear`.
+- **Boats** ([gear.ts](../src/game/gear.ts) `BOAT_TIERS`): 4 tiers (lake-only → ocean-capable) reach
+  the boat-only deep-water spots via the top-down boat view. Validate: `npm run sim:boat`.
+- **Map / travel / locations** ([regions.ts](../src/world/regions.ts)): the US is 8 regions; you
+  spawn in a coastal one and pay to travel. The `locations` tags are still forward-looking (per-lake
+  species gating isn't wired yet — spots draw from the tier/water pool).
 
 ## 7. Tuning workflow
 

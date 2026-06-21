@@ -174,18 +174,32 @@ brutal end-game chase even with the best line — verified by:
 npm run sim:gear   # gear-unlock curve per line tier + economy affordability
 ```
 
+## Spots: free vs paid, and the session loop
+Each region's foot spots split into **free** (streams, rivers, lake shores,
+beaches — `FREE_FOOT_BODIES`) and **paid premium** (**docks** on lakes, **piers**
+on the ocean — better fish). Free spots are the **no-soft-lock safety net**: a
+broke player can always fish a free spot to earn (`regionsim` asserts every
+region has one). The SpotCard shows **"Fish on foot · Free"** or **"· $N"**, and
+**locks with "Not enough money to fish here"** when you can't afford a paid spot.
+
+A **session is pay-once on entry → fish until you leave**; the **cooler cap** is
+the natural limiter (the fishing HUD shows `🧊 Cooler n/CAP` and disables Cast
+when full). All catches (incl. bait fish) go to the cooler; converting bait →
+tackle box happens later in the shop. (Stamina/energy + premium currency are a
+deliberate later pay-to-win layer.)
+
 ## Boats — `src/game/gear.ts` (BOAT_TIERS) + `src/world/BoatScene.tsx`
 Buy a boat in the shop (**4 tiers**: Jon Boat = lake-only/slow → Offshore Cruiser
-= fast/ocean) to reach the deep-water spots. Tapping a **lake/beach/pier** POI
-opens a **foot-or-boat menu**: *fish on foot* (a single shore spot, cheaper) or
-*take the boat out* — a **top-down driving view** ([BoatScene](src/world/BoatScene.tsx))
-where you steer with the virtual stick to buoys and tap **Fish here**. Rivers &
-streams are foot-only. The boat option is gated by `player.canBoat(water)` (lake
-needs any boat; ocean needs an ocean-capable boat).
+= fast/ocean) to reach the deep-water spots. Tapping a **lake or beach** POI
+opens a **foot-or-boat menu**: *fish on foot* (the free shore) or *take the boat
+out* — a **top-down driving view** ([BoatScene](src/world/BoatScene.tsx)) where
+you steer with the virtual stick to buoys and tap **Fish here**. Docks, piers,
+rivers & streams are foot-only. The boat option is gated by `player.canBoat(water)`
+(lake needs any boat; ocean needs an ocean-capable boat).
 
-Each fishing session charges a **fishing fee** (`fishFee(quality, byBoat)`, boat
-≈ foot×3) — a sink on top of region travel; one average catch covers it so a
-session stays net-positive. Boat ownership persists. Verified by:
+Fees: free for `FREE_FOOT_BODIES`, else `fishFee(quality, byBoat)` (boat ≈
+foot×3) — a sink on premium spots; one average catch covers it so a session stays
+net-positive. Boat ownership persists. Verified by:
 ```bash
 npm run sim:boat   # boat tiers, fee table, fee-vs-catch-value sanity
 ```

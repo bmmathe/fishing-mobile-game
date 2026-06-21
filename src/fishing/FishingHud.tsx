@@ -14,7 +14,23 @@ export interface BaitBarProps {
   onEquip: (id: string | null) => void;
 }
 
-export function FishingHud({ store, onExit, bait }: { store: FishingStore; onExit?: () => void; bait?: BaitBarProps }) {
+export interface CoolerInfo {
+  count: number;
+  cap: number;
+  full: boolean;
+}
+
+export function FishingHud({
+  store,
+  onExit,
+  bait,
+  cooler,
+}: {
+  store: FishingStore;
+  onExit?: () => void;
+  bait?: BaitBarProps;
+  cooler?: CoolerInfo;
+}) {
   // Re-render on every throttled store notify.
   useSyncExternalStore(store.subscribe, store.getVersion);
   const s = store.state;
@@ -66,6 +82,13 @@ export function FishingHud({ store, onExit, bait }: { store: FishingStore; onExi
         <button style={ui.mapBtn} onClick={onExit}>
           ← Map
         </button>
+      )}
+
+      {/* Cooler fill — the session limiter */}
+      {cooler && (
+        <div style={{ ...ui.coolerChip, ...(cooler.full ? ui.coolerFull : null) }}>
+          🧊 Cooler {cooler.count}/{cooler.cap}
+        </div>
       )}
 
       {/* Top: progress + stamina (only once fighting) */}
@@ -128,7 +151,7 @@ export function FishingHud({ store, onExit, bait }: { store: FishingStore; onExi
       {/* Bottom: tier picker + cast · wait panel · or the control stick */}
       <div style={ui.bottom}>
         {showCast ? (
-          <CastPanel store={store} bait={bait} />
+          <CastPanel store={store} bait={bait} coolerFull={cooler?.full ?? false} />
         ) : waiting ? (
           <WaitPanel store={store} />
         ) : (
@@ -176,7 +199,7 @@ function Meter({ label, pct, color }: { label: string; pct: number; color: strin
 }
 
 /** Idle screen: the spot's name + Cast. Dev tier/water selectors gated behind DEV. */
-function CastPanel({ store, bait }: { store: FishingStore; bait?: BaitBarProps }) {
+function CastPanel({ store, bait, coolerFull }: { store: FishingStore; bait?: BaitBarProps; coolerFull: boolean }) {
   useSyncExternalStore(store.subscribe, store.getVersion);
   const spot = store.currentSpot;
   const tier = getTier(store.selectedTier);
@@ -256,9 +279,13 @@ function CastPanel({ store, bait }: { store: FishingStore; bait?: BaitBarProps }
         </>
       )}
 
-      <button style={ui.castBtn} onClick={() => store.cast()}>
-        {result ? "Fish again" : "Cast"}
-      </button>
+      {coolerFull ? (
+        <div style={ui.coolerWarn}>🧊 Cooler full — head back (← Map) to sell</div>
+      ) : (
+        <button style={ui.castBtn} onClick={() => store.cast()}>
+          {result ? "Fish again" : "Cast"}
+        </button>
+      )}
     </div>
   );
 }
@@ -289,6 +316,9 @@ const ui: Record<string, CSSProperties> = {
       "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
   },
   mapBtn: { pointerEvents: "auto", position: "absolute", top: "max(14px, env(safe-area-inset-top))", left: "max(14px, env(safe-area-inset-left))", border: "none", borderRadius: 18, padding: "8px 14px", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", cursor: "pointer", zIndex: 2 },
+  coolerChip: { position: "absolute", top: "max(14px, env(safe-area-inset-top))", right: "max(14px, env(safe-area-inset-right))", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", borderRadius: 14, padding: "8px 12px", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", zIndex: 2 },
+  coolerFull: { background: "#d4564f", color: "#fff" },
+  coolerWarn: { fontWeight: 700, color: "#c0392b", textAlign: "center", maxWidth: 260, marginTop: 2 },
   topBars: { position: "absolute", top: 18, left: 96, right: 16, display: "flex", gap: 12 },
   meterLabel: { fontSize: 11, fontWeight: 600, opacity: 0.8, marginBottom: 3, textShadow: "0 1px 2px rgba(255,255,255,0.6)" },
   meterTrack: { height: 12, borderRadius: 6, background: "rgba(255,255,255,0.45)", overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)" },
