@@ -1,6 +1,6 @@
 import { Canvas } from "@react-three/fiber";
 import { FishingScene } from "./FishingScene";
-import { FishingHud, type BaitBarProps } from "./FishingHud";
+import { FishingHud, type BaitBarProps, type CoolerInfo } from "./FishingHud";
 import type { FishingStore } from "./fishingStore";
 
 /**
@@ -17,7 +17,7 @@ export function FishingGame({
   store: FishingStore;
   onExit: () => void;
   bait?: BaitBarProps;
-  cooler?: { count: number; cap: number; full: boolean };
+  cooler?: CoolerInfo;
 }) {
   return (
     <>

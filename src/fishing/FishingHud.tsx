@@ -1,6 +1,7 @@
-import { useEffect, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
 import type { FishingStore } from "./fishingStore";
 import { TIERS, getTier, type Water } from "./fishCatalog";
+import type { CaughtFish } from "../game/playerStore";
 import { Stick } from "../ui/Stick";
 
 // Difficulty ramp across the 8 tiers (green → red) + a label per tier.
@@ -18,6 +19,8 @@ export interface CoolerInfo {
   count: number;
   cap: number;
   full: boolean;
+  /** The catches currently kept in the cooler (most-recent last). */
+  items: CaughtFish[];
 }
 
 export function FishingHud({
@@ -33,6 +36,7 @@ export function FishingHud({
 }) {
   // Re-render on every throttled store notify.
   useSyncExternalStore(store.subscribe, store.getVersion);
+  const [coolerOpen, setCoolerOpen] = useState(false);
   const s = store.state;
   const tensionPct = Math.min(s.tension / store.line.maxTension, 1.2) * 100;
   const danger = store.danger;
@@ -84,12 +88,18 @@ export function FishingHud({
         </button>
       )}
 
-      {/* Cooler fill — the session limiter */}
+      {/* Cooler fill — the session limiter; tap to see what you've kept */}
       {cooler && (
-        <div style={{ ...ui.coolerChip, ...(cooler.full ? ui.coolerFull : null) }}>
+        <button
+          style={{ ...ui.coolerChip, ...(cooler.full ? ui.coolerFull : null) }}
+          onClick={() => setCoolerOpen(true)}
+        >
           🧊 Cooler {cooler.count}/{cooler.cap}
-        </div>
+        </button>
       )}
+
+      {/* Cooler contents (read-only; selling happens at the shop) */}
+      {cooler && coolerOpen && <CoolerView cooler={cooler} onClose={() => setCoolerOpen(false)} />}
 
       {/* Top: progress + stamina (only once fighting) */}
       {fighting && (
@@ -183,6 +193,51 @@ function WaitPanel({ store }: { store: FishingStore }) {
       <button style={ui.recastBtn} onClick={() => store.recast()}>
         Reel in &amp; recast
       </button>
+    </div>
+  );
+}
+
+/** Tap-the-cooler panel: a read-only list of what you've kept this session. */
+function CoolerView({ cooler, onClose }: { cooler: CoolerInfo; onClose: () => void }) {
+  const totalValue = cooler.items.reduce((sum, f) => sum + f.value, 0);
+  // Most-recent catch first.
+  const items = cooler.items.slice().reverse();
+  return (
+    <div style={ui.coolerBackdrop} onClick={onClose}>
+      <div style={ui.coolerPanel} onClick={(e) => e.stopPropagation()}>
+        <div style={ui.coolerHeader}>
+          <span style={{ fontWeight: 800, fontSize: 17 }}>
+            🧊 Cooler {cooler.count}/{cooler.cap}
+          </span>
+          <button style={ui.coolerClose} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        {items.length === 0 ? (
+          <div style={ui.coolerEmpty}>Cooler's empty — land a fish to fill it.</div>
+        ) : (
+          <>
+            <div style={ui.coolerList}>
+              {items.map((f, i) => (
+                <div key={i} style={ui.coolerRow}>
+                  <span style={{ ...ui.tierDot, background: tierColor(f.tier) }}>{f.tier}</span>
+                  <span style={ui.coolerName}>{f.name}</span>
+                  <span style={ui.coolerMeta}>
+                    {f.weightKg} kg · {f.water === "fresh" ? "🟦" : "🌊"}
+                  </span>
+                  <span style={ui.coolerValue}>${f.value}</span>
+                </div>
+              ))}
+            </div>
+            <div style={ui.coolerFooter}>
+              <span>Total value</span>
+              <span style={{ fontWeight: 800 }}>${totalValue.toLocaleString()}</span>
+            </div>
+            <div style={ui.coolerHint}>Head to the 🎣 Shop to sell or mount these.</div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -316,8 +371,21 @@ const ui: Record<string, CSSProperties> = {
       "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
   },
   mapBtn: { pointerEvents: "auto", position: "absolute", top: "max(14px, env(safe-area-inset-top))", left: "max(14px, env(safe-area-inset-left))", border: "none", borderRadius: 18, padding: "8px 14px", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", cursor: "pointer", zIndex: 2 },
-  coolerChip: { position: "absolute", top: "max(14px, env(safe-area-inset-top))", right: "max(14px, env(safe-area-inset-right))", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", borderRadius: 14, padding: "8px 12px", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", zIndex: 2 },
+  coolerChip: { pointerEvents: "auto", position: "absolute", top: "max(14px, env(safe-area-inset-top))", right: "max(14px, env(safe-area-inset-right))", fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", border: "none", borderRadius: 14, padding: "8px 12px", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", cursor: "pointer", zIndex: 2 },
   coolerFull: { background: "#d4564f", color: "#fff" },
+  coolerBackdrop: { pointerEvents: "auto", position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 5 },
+  coolerPanel: { width: "min(420px, 100%)", maxHeight: "min(70vh, 560px)", display: "flex", flexDirection: "column", background: "#f4f1e8", borderRadius: 20, boxShadow: "0 12px 40px rgba(0,0,0,0.3)", overflow: "hidden", color: "#3c5a57" },
+  coolerHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid rgba(60,90,87,0.15)" },
+  coolerClose: { border: "none", background: "rgba(60,90,87,0.1)", color: "#3c5a57", borderRadius: 10, width: 30, height: 30, fontSize: 15, fontWeight: 700, cursor: "pointer" },
+  coolerEmpty: { padding: "32px 24px", textAlign: "center", opacity: 0.7, fontSize: 15 },
+  coolerList: { overflowY: "auto", padding: "6px 0", flex: 1 },
+  coolerRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 18px" },
+  tierDot: { flex: "0 0 auto", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, color: "#fff", fontWeight: 800, fontSize: 12 },
+  coolerName: { fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  coolerMeta: { fontSize: 12, opacity: 0.75, flex: "0 0 auto" },
+  coolerValue: { fontWeight: 800, color: "#2e7d4f", flex: "0 0 auto", minWidth: 48, textAlign: "right" },
+  coolerFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderTop: "1px solid rgba(60,90,87,0.15)", fontSize: 15 },
+  coolerHint: { padding: "0 18px 14px", fontSize: 12, opacity: 0.65, textAlign: "center" },
   coolerWarn: { fontWeight: 700, color: "#c0392b", textAlign: "center", maxWidth: 260, marginTop: 2 },
   topBars: { position: "absolute", top: 18, left: 96, right: 16, display: "flex", gap: 12 },
   meterLabel: { fontSize: 11, fontWeight: 600, opacity: 0.8, marginBottom: 3, textShadow: "0 1px 2px rgba(255,255,255,0.6)" },

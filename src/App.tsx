@@ -152,7 +152,7 @@ export default function App() {
           store={store}
           onExit={() => setView(fishingReturn)}
           bait={baitBar}
-          cooler={{ count: player.inventory.length, cap: COOLER_CAP, full: player.coolerFull }}
+          cooler={{ count: player.inventory.length, cap: COOLER_CAP, full: player.coolerFull, items: player.inventory }}
         />
       )}
 
