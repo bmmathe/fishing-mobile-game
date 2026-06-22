@@ -1,8 +1,9 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Html, Line, OrbitControls } from "@react-three/drei";
+import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { palette } from "../scene/palette";
+import { MapOrbitControls } from "./MapControls";
 import { REGIONS, type Region } from "./regions";
 import { Fish, Lake, Mountain, OilDerrick, PalmTree, PineTree } from "./MapDecor";
 
@@ -69,7 +70,7 @@ export function RegionSelect({
 
         <MapDecorations />
 
-        <OrbitControls target={[0, 0, 1]} maxPolarAngle={Math.PI / 2.4} minDistance={16} maxDistance={42} enablePan={false} />
+        <MapOrbitControls target={[0, 0, 1]} maxPolarAngle={Math.PI / 2.4} minDistance={16} maxDistance={42} />
       </Canvas>
 
       <div style={overlay.title}>

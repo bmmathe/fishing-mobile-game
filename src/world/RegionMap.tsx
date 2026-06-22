@@ -1,7 +1,8 @@
 import { useState, type CSSProperties } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
+import { Html } from "@react-three/drei";
 import { palette } from "../scene/palette";
+import { MapOrbitControls } from "./MapControls";
 import { SpotCard } from "./SpotCard";
 import { BOAT_BODIES, type Region, type Spot } from "./regions";
 
@@ -75,12 +76,11 @@ export function RegionMap({
           <SpotPin key={s.id} spot={s} onSelect={setSelected} />
         ))}
 
-        <OrbitControls
+        <MapOrbitControls
           target={[0, 0, 1]}
           maxPolarAngle={Math.PI / 2.3}
           minDistance={10}
           maxDistance={34}
-          enablePan={false}
         />
       </Canvas>
 
