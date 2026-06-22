@@ -155,6 +155,10 @@ export function FishingHud({
           }}
         >
           {centerMsg}
+          {/* Why-it-happened feedback (e.g. shake-off: skill vs. luck) */}
+          {s.subMessage && (s.phase === "lost" || s.phase === "landed") && (
+            <div style={ui.subMessage}>{s.subMessage}</div>
+          )}
         </div>
       )}
 
@@ -347,16 +351,20 @@ function CastPanel({ store, bait, coolerFull }: { store: FishingStore; bait?: Ba
 
 /** Drag-to-reel (pull down) + steer (left/right) control. */
 function ReelStick({ store }: { store: FishingStore }) {
+  // Lift the pad well clear of the screen edge: the full-reel drag (down) ends
+  // at the pad's bottom edge, so without this the thumb runs into the phone.
   return (
-    <Stick
-      hint="reel ↓ · steer ←→"
-      onStart={() => store.tapHook()} // engaging sets the hook during a bite
-      onMove={(x, y) => {
-        store.setSteer(x);
-        store.setReel(Math.max(0, y)); // pull DOWN to reel in
-      }}
-      onRelease={() => store.releaseInput()}
-    />
+    <div style={ui.reelStickLift}>
+      <Stick
+        hint="reel ↓ · steer ←→"
+        onStart={() => store.tapHook()} // engaging sets the hook during a bite
+        onMove={(x, y) => {
+          store.setSteer(x);
+          store.setReel(Math.max(0, y)); // pull DOWN to reel in
+        }}
+        onRelease={() => store.releaseInput()}
+      />
+    </div>
   );
 }
 
@@ -400,7 +408,9 @@ const ui: Record<string, CSSProperties> = {
   tensionFill: { width: "100%", transition: "height 0.05s linear" },
   snapWarn: { fontSize: 12, fontWeight: 800, color: "#c0392b" },
   message: { position: "absolute", top: "14%", left: 0, right: 0, textAlign: "center", fontWeight: 700, textShadow: "0 1px 3px rgba(255,255,255,0.7)" },
+  subMessage: { margin: "8px auto 0", maxWidth: 280, fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: "#3c5a57", opacity: 0.85, textShadow: "0 1px 2px rgba(255,255,255,0.7)" },
   bottom: { position: "absolute", left: 0, right: 0, bottom: "max(20px, env(safe-area-inset-bottom))", display: "flex", justifyContent: "center" },
+  reelStickLift: { marginBottom: 96 },
   waitPanel: { pointerEvents: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.42)", borderRadius: 20, padding: "12px 18px", backdropFilter: "blur(4px)", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" },
   holeRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 15 },
   qualityBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, color: "#fff", fontWeight: 800, fontSize: 13 },

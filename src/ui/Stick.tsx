@@ -1,6 +1,6 @@
 import { useRef, useState, type CSSProperties } from "react";
 
-const R = 68; // px radius of the control pad
+const R = 86; // px radius of the control pad
 
 /**
  * A reusable virtual thumb-stick. Reports normalized (x, y) in [-1, 1] where
@@ -78,6 +78,6 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "center",
     boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
   },
-  hint: { position: "absolute", fontSize: 10, opacity: 0.7, fontWeight: 600, pointerEvents: "none", color: "#3c5a57", fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
-  knob: { width: 56, height: 56, borderRadius: "50%", background: "rgba(90,169,189,0.9)", boxShadow: "0 2px 8px rgba(0,0,0,0.25)", pointerEvents: "none" },
+  hint: { position: "absolute", fontSize: 11, opacity: 0.7, fontWeight: 600, pointerEvents: "none", color: "#3c5a57", fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
+  knob: { width: 70, height: 70, borderRadius: "50%", background: "rgba(90,169,189,0.9)", boxShadow: "0 2px 8px rgba(0,0,0,0.25)", pointerEvents: "none" },
 };

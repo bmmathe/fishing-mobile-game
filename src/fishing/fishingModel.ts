@@ -89,6 +89,8 @@ export interface FightState {
   biteTimer: number;
   result?: "landed" | "lost";
   message: string;
+  /** Optional secondary line giving feedback on *why* an outcome happened. */
+  subMessage?: string;
 }
 
 export type Rng = () => number;
@@ -313,6 +315,14 @@ export function stepFight(
       s.phase = "lost";
       s.result = "lost";
       s.message = "The hook pulled free!";
+      // Tell the player whether they could have done better or just got
+      // unlucky — at full hazard (band missed) it was partly avoidable; in the
+      // safe band, a lightly-hooked fish can still shake loose by chance.
+      s.subMessage = wellManaged
+        ? "Tension was well-managed — that one just shook loose. Lightly-hooked fish sometimes do."
+        : ratio < TUNING.slipBandLo
+          ? "Too much slack during the run — keep tension up to hold the hook in."
+          : "Tension was redlined during the run — ease off so it stays out of the snap zone.";
       return s;
     }
   }
