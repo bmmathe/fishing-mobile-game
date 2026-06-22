@@ -18,6 +18,7 @@ import {
 } from "./fishCatalog";
 import { DEFAULT_HOLE, QUALITY_CURVES, rollWaitTime, type FishingHole } from "./fishingHoles";
 import { pickTier, type Spot } from "../world/regions";
+import { effectiveHookHold, type HookDef } from "../game/hooks";
 
 export interface Catch {
   name: string;
@@ -53,6 +54,12 @@ export class FishingStore {
   baitWaitFactor = 1;
   hasBait?: () => boolean;
   consumeBait?: () => void;
+
+  /** Equipped hook effect (set by App); stock checked via hasHook. */
+  hookEffect: HookDef | null = null;
+  hasHook?: () => boolean;
+  /** Called when the line snaps — destroys the equipped hook. */
+  onLineSnap?: () => void;
 
   /** Selected difficulty tier (1–8) and water type — which pool we're fishing. */
   selectedTier = 1;
@@ -168,6 +175,21 @@ export class FishingStore {
     this.notify();
   }
 
+  /** Set the equipped hook (null = none). Bonus applies only when hasHook is true. */
+  setHook(hook: HookDef | null) {
+    this.hookEffect = hook;
+    this.notify();
+  }
+
+  /** Apply equipped hook bonus to a rolled fish spec. */
+  private withHookHold(fish: FishDef): FishDef {
+    if (!this.hookEffect || !(this.hasHook?.() ?? false)) return fish;
+    return {
+      ...fish,
+      hookHold: effectiveHookHold(fish.hookHold ?? 1, fish.tier, this.hookEffect),
+    };
+  }
+
   /** Configure the store from a tapped map spot: water, hole (wait), fish pool. */
   setSpot(spot: Spot) {
     this.currentSpot = spot;
@@ -208,9 +230,9 @@ export class FishingStore {
     const spot = this.currentSpot;
     if (spot) {
       const tiers = baited ? this.boostTiers(spot.tiers) : spot.tiers;
-      this._fish = randomFishFromPool(pickTier(tiers), spot.water, Math.random, spot.access);
+      this._fish = this.withHookHold(randomFishFromPool(pickTier(tiers), spot.water, Math.random, spot.access));
     } else {
-      this._fish = randomFishFromPool(this.selectedTier, this.selectedWater, Math.random, "land");
+      this._fish = this.withHookHold(randomFishFromPool(this.selectedTier, this.selectedWater, Math.random, "land"));
     }
     const wait = rollWaitTime(this.currentHole) * (baited ? this.baitWaitFactor : 1);
     this.state = startCast(this._fish, wait);
@@ -244,6 +266,11 @@ export class FishingStore {
 
     // Clamp dt so a tab-out / long frame can't teleport the fight.
     stepFight(this.state, input, this._fish, this.line, Math.min(dt, 1 / 20));
+
+    // Line snap destroys the equipped hook (consumable tackle).
+    if (this.state.phase === "lost" && prevPhase !== "lost" && this.state.message.startsWith("SNAP!")) {
+      this.onLineSnap?.();
+    }
 
     // On a fresh landing, record the catch (junk vs fish differ).
     if (this.state.phase === "landed" && prevPhase !== "landed") {

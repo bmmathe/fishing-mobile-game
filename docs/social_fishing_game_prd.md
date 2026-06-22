@@ -79,8 +79,8 @@ state in small external stores with **localStorage** persistence; tuning validat
 - **Locations** (§3.1) — per-region spots: **free** foot spots (stream/river/lake/beach) and **paid
   premium** foot spots (docks/piers); a per-session **fishing fee** on premium/boat spots; a
   **limited cooler** is the natural session limiter.
-- **Gear progression** (§3.2) — line tiers (raise the snap limit → unlock higher tiers) and pole
-  tiers (reel speed), gated by currency.
+- **Gear progression** (§3.2) — line tiers (raise the snap limit → unlock higher tiers), pole
+  tiers (reel speed), and **hook tackle** (tier-specific shake-off reduction), gated by currency.
 - **Bait economy** (§3.2) — keep forage as bait; equip it to bias toward higher tiers / shorten wait.
   Standard bait (Worms) is NPC-buyable; premium bait is catch-only.
 - **Boats & deep water** (§3.3) — 4 boat tiers (lake-only → ocean); a top-down boat-navigation view

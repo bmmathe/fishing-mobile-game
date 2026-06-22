@@ -47,11 +47,12 @@ src/
   game/               progression (economy + gear + boats + bait)
     gear.ts           line/pole/boat tiers, fishValue(), fishFee()
     bait.ts           bait defs (Worms + forage); tierBoost / waitFactor per bait
-    playerStore.ts    currency, cooler, bait box, gear/boat, trophies, fishdex; persisted
+    hooks.ts          specialty hook tackle; tier-specific holdBonus
+    playerStore.ts    currency, cooler, bait/hook box, gear/boat, trophies, fishdex; persisted
     TackleShop.tsx    Cooler (sell / →Bait / 🏆Mount) / Bait / Gear tabs
     Collection.tsx    Trophy Wall + Fishdex screens (reached via 🏆 on the map)
   scene/              low-poly props + shared palette.ts (reused by world/)
-scripts/sim.ts        headless harness (also sim:wait, sim:regions, sim:gear, sim:boat, sim:bait)
+scripts/sim.ts        headless harness (also sim:wait, sim:regions, sim:gear, sim:boat, sim:bait, sim:hook)
 ```
 
 ## The fishing minigame (drag-to-reel + steer)
@@ -165,13 +166,27 @@ an inventory ([playerStore.ts](src/game/playerStore.ts)); at the **Tackle Shop**
 - **Line tiers** raise the fight's snap limit (`maxTension`) — this is what
   **unlocks higher fish tiers** (a tier-6 fish overwhelms the starter line).
 - **Pole tiers** raise reel speed (`reelMult`).
+- **Hook tackle** reduces shake-offs for matching tiers (`holdBonus` on `hookHold`);
+  hooks are bought in the shop, equipped like bait, and **lost when the line snaps**.
 
-Gear feeds the fight via `store.applyGear(maxTension, reelMult)`; the App banks
+Gear feeds the fight via `store.applyGear(maxTension, reelMult)` and `store.setHook(...)`; the App banks
 catches through a `fishingStore.onCatch` hook. Progress persists to
 `localStorage`. Tuned so each line opens the next tier band and T8 stays a
 brutal end-game chase even with the best line — verified by:
 ```bash
 npm run sim:gear   # gear-unlock curve per line tier + economy affordability
+npm run sim:hook   # hook hold-bonus curve + economy affordability
+```
+
+## Hook tackle — `src/game/hooks.ts`
+Buy specialty hooks in the **Gear** tab (Panfish, Wide Gap, etc.). Equip one in the cast panel
+before fishing. Each hook's `forTiers` list controls which fish tiers get its `holdBonus` added to
+`hookHold`, cutting shake-off losses during runs. Hooks do **not** affect cast odds or snap limit.
+**A line snap destroys the equipped hook** — restock at the shop (Standard J-Hooks restock free).
+Verified by:
+```bash
+npm run sim:hook   # per-hook win-rate matrix vs tier targets
+npm run sim -- --hook panfish   # quick single-hook validation
 ```
 
 ## Spots: free vs paid, and the session loop

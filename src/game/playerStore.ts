@@ -1,5 +1,6 @@
 import { BOAT_TIERS, fishValue, LINE_TIERS, POLE_TIERS } from "./gear";
 import { baitFromFish, WORMS, type BaitDef } from "./bait";
+import { getHook, HOOKS, STARTER_HOOK_COUNT, STARTER_HOOK_ID, type HookDef } from "./hooks";
 
 export interface FishBait {
   grade: number;
@@ -18,6 +19,11 @@ export interface CaughtFish {
 
 export interface BaitStack {
   def: BaitDef;
+  count: number;
+}
+
+export interface HookStack {
+  def: HookDef;
   count: number;
 }
 
@@ -44,6 +50,8 @@ interface Persisted {
   inventory: CaughtFish[];
   baitBox: Record<string, BaitStack>;
   equippedBaitId: string | null;
+  hookBox: Record<string, HookStack>;
+  equippedHookId: string | null;
   trophies: Trophy[];
   fishdex: Record<string, DexEntry>;
   lineTier: number;
@@ -72,6 +80,9 @@ export class PlayerStore {
   /** Kept bait by id. */
   baitBox: Record<string, BaitStack> = {};
   equippedBaitId: string | null = null;
+  /** Hook tackle in stock (consumed when the line snaps). */
+  hookBox: Record<string, HookStack> = {};
+  equippedHookId: string | null = null;
   /** Mounted catches (Trophy Wall) + the species collection log (Fishdex). */
   trophies: Trophy[] = [];
   fishdex: Record<string, DexEntry> = {};
@@ -87,7 +98,16 @@ export class PlayerStore {
   private listeners = new Set<() => void>();
 
   constructor() {
+    this.seedStarterHooks();
     this.load();
+  }
+
+  private seedStarterHooks() {
+    const def = getHook(STARTER_HOOK_ID);
+    if (def) {
+      this.hookBox[STARTER_HOOK_ID] = { def, count: STARTER_HOOK_COUNT };
+      this.equippedHookId = STARTER_HOOK_ID;
+    }
   }
 
   // --- useSyncExternalStore glue ---
@@ -286,6 +306,56 @@ export class PlayerStore {
     return true;
   }
 
+  // --- hook tackle ---
+  buyHook(id: string, qty = 1): boolean {
+    const def = getHook(id);
+    if (!def || qty < 1) return false;
+    const cost = def.price * qty;
+    if (this.currency < cost) return false;
+    this.currency -= cost;
+    const stack = this.hookBox[id];
+    if (stack) stack.count += qty;
+    else this.hookBox[id] = { def, count: qty };
+    this.changed();
+    return true;
+  }
+
+  equipHook(id: string | null) {
+    this.equippedHookId = id && this.hookBox[id]?.count ? id : null;
+    this.changed();
+  }
+
+  get equippedHook(): HookStack | null {
+    return this.equippedHookId ? this.hookBox[this.equippedHookId] ?? null : null;
+  }
+
+  /** Equipped hook for the fight (null if none in stock). */
+  get hookEffect(): HookDef | null {
+    const s = this.equippedHook;
+    return s && s.count > 0 ? s.def : null;
+  }
+
+  hasHook(): boolean {
+    return (this.equippedHook?.count ?? 0) > 0;
+  }
+
+  /** Remove one equipped hook after a line snap. */
+  consumeHookOnSnap(): boolean {
+    const stack = this.equippedHook;
+    if (!stack || stack.count <= 0) return false;
+    stack.count -= 1;
+    if (stack.count <= 0) {
+      delete this.hookBox[stack.def.id];
+      this.equippedHookId = null;
+    }
+    this.changed();
+    return true;
+  }
+
+  get ownedHooks(): HookDef[] {
+    return HOOKS.filter((h) => (this.hookBox[h.id]?.count ?? 0) > 0);
+  }
+
   // --- gear purchases (buy the next tier up if affordable) ---
   buyLine(): boolean {
     return this.buy(LINE_TIERS, "lineTier");
@@ -348,6 +418,8 @@ export class PlayerStore {
         inventory: this.inventory,
         baitBox: this.baitBox,
         equippedBaitId: this.equippedBaitId,
+        hookBox: this.hookBox,
+        equippedHookId: this.equippedHookId,
         trophies: this.trophies,
         fishdex: this.fishdex,
         lineTier: this.lineTier,
@@ -369,6 +441,14 @@ export class PlayerStore {
       this.inventory = (d.inventory ?? []).slice(0, COOLER_CAP);
       this.baitBox = d.baitBox ?? {};
       this.equippedBaitId = d.equippedBaitId && this.baitBox[d.equippedBaitId] ? d.equippedBaitId : null;
+      if (d.hookBox && Object.keys(d.hookBox).length > 0) {
+        this.hookBox = d.hookBox;
+      } else {
+        this.seedStarterHooks();
+      }
+      this.equippedHookId =
+        d.equippedHookId && this.hookBox[d.equippedHookId] ? d.equippedHookId : STARTER_HOOK_ID;
+      if (!this.hookBox[this.equippedHookId ?? ""]) this.equippedHookId = null;
       this.trophies = (d.trophies ?? []).slice(0, TROPHY_CAP);
       this.fishdex = d.fishdex ?? {};
       this.lineTier = clampTier(d.lineTier, LINE_TIERS.length);

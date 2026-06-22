@@ -16,6 +16,10 @@ import {
   type LineSpec,
 } from "../src/fishing/fishingModel.ts";
 import { FISH, TIERS } from "../src/fishing/fishCatalog.ts";
+import { effectiveHookHold, getHook } from "../src/game/hooks.ts";
+
+const hookArg = process.argv.indexOf("--hook");
+const HOOK = hookArg >= 0 ? getHook(process.argv[hookArg + 1] ?? "") ?? null : null;
 
 // The starter line everything is balanced against (see createDefaultStore).
 const STARTER_LINE: LineSpec = { maxTension: 0.78 };
@@ -66,13 +70,20 @@ function winRate(fish: FishSpec, line: LineSpec, policy: Policy) {
   return wins / SEEDS.length;
 }
 
-console.log(`=== 8-tier catch-rate validation (starter line maxTension=${STARTER_LINE.maxTension}) ===`);
+console.log(
+  `=== 8-tier catch-rate validation (starter line maxTension=${STARTER_LINE.maxTension}` +
+    `${HOOK ? `, hook=${HOOK.name}` : ", no hook"}) ===`,
+);
 console.log("tier  target   skilled   reckless   status   species");
 for (const t of TIERS) {
   const species = FISH.filter((f) => f.tier === t.tier && f.kind === "fish");
   if (species.length === 0) continue;
-  const sk = species.map((f) => winRate(f, STARTER_LINE, skilled(STARTER_LINE)));
-  const rk = species.map((f) => winRate(f, STARTER_LINE, reckless));
+  const withHook = (f: FishSpec) => ({
+    ...f,
+    hookHold: effectiveHookHold(f.hookHold ?? 1, f.tier, HOOK),
+  });
+  const sk = species.map((f) => winRate(withHook(f), STARTER_LINE, skilled(STARTER_LINE)));
+  const rk = species.map((f) => winRate(withHook(f), STARTER_LINE, reckless));
   const avgSk = sk.reduce((a, b) => a + b, 0) / sk.length;
   const avgRk = rk.reduce((a, b) => a + b, 0) / rk.length;
 

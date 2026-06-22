@@ -79,10 +79,10 @@ export const TIERS: TierDef[] = [
  * curve without making small fish absurdly strong.
  */
 const BAND: Record<number, Omit<FishSpec, "name">> = {
-  1: { strength: 0.3, runStrength: 1.2, runChance: 0.45, agility: 2.2, startDistance: 11, hookHold: 0.45 },
-  2: { strength: 0.42, runStrength: 1.35, runChance: 0.52, agility: 2.7, startDistance: 15, hookHold: 0.35 },
-  3: { strength: 0.7, runStrength: 1.55, runChance: 0.62, agility: 3.1, startDistance: 19, hookHold: 0.55 },
-  4: { strength: 0.76, runStrength: 1.7, runChance: 0.7, agility: 3.6, startDistance: 23, hookHold: 0.9 },
+  1: { strength: 0.3, runStrength: 1.2, runChance: 0.45, agility: 2.2, startDistance: 11, hookHold: 0.26 },
+  2: { strength: 0.42, runStrength: 1.35, runChance: 0.52, agility: 2.7, startDistance: 15, hookHold: 0.16 },
+  3: { strength: 0.7, runStrength: 1.55, runChance: 0.62, agility: 3.1, startDistance: 19, hookHold: 0.35 },
+  4: { strength: 0.76, runStrength: 1.7, runChance: 0.7, agility: 3.6, startDistance: 23, hookHold: 0.82 },
   5: { strength: 0.9, runStrength: 1.85, runChance: 0.76, agility: 4.1, startDistance: 27, hookHold: 0.95 },
   6: { strength: 1.05, runStrength: 2.0, runChance: 0.8, agility: 4.5, startDistance: 32, hookHold: 0.98 },
   7: { strength: 1.25, runStrength: 2.2, runChance: 0.84, agility: 5.0, startDistance: 38, hookHold: 0.99 },

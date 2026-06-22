@@ -26,17 +26,23 @@ export default function App() {
   // Re-render when player state (currency, gear, location) changes.
   useSyncExternalStore(player.subscribe, player.getVersion);
 
-  // Bank catches into the cooler + wire bait stock checks to the player.
+  // Bank catches into the cooler + wire bait/hook stock to the player.
   useEffect(() => {
     store.onCatch = (c) => player.addCatch(c);
     store.hasBait = () => player.hasBait();
     store.consumeBait = () => {
       player.consumeBait();
     };
+    store.hasHook = () => player.hasHook();
+    store.onLineSnap = () => {
+      player.consumeHookOnSnap();
+    };
     return () => {
       store.onCatch = undefined;
       store.hasBait = undefined;
       store.consumeBait = undefined;
+      store.hasHook = undefined;
+      store.onLineSnap = undefined;
     };
   }, [store, player]);
 
@@ -49,6 +55,11 @@ export default function App() {
   useEffect(() => {
     store.setBait(player.baitEffect);
   }, [store, player, player.equippedBaitId]);
+
+  // Keep the fight's hook in sync with equipped tackle.
+  useEffect(() => {
+    store.setHook(player.hookEffect);
+  }, [store, player, player.equippedHookId, player.hookEffect]);
 
   // Dev-only: expose stores + navigation for debugging / automated testing.
   if (import.meta.env.DEV) {
@@ -93,6 +104,18 @@ export default function App() {
     })),
     equippedId: player.equippedBaitId,
     onEquip: (id: string | null) => player.equipBait(id),
+  };
+
+  const hookBar = {
+    options: Object.values(player.hookBox).map((s) => ({
+      id: s.def.id,
+      name: s.def.name,
+      count: s.count,
+      hint: `T${Math.min(...s.def.forTiers)}–T${Math.max(...s.def.forTiers)}` +
+        (s.def.holdBonus > 0 ? ` · +${(s.def.holdBonus * 100).toFixed(0)}% hold` : ""),
+    })),
+    equippedId: player.equippedHookId,
+    onEquip: (id: string | null) => player.equipHook(id),
   };
 
   return (
@@ -152,6 +175,7 @@ export default function App() {
           store={store}
           onExit={() => setView(fishingReturn)}
           bait={baitBar}
+          hooks={hookBar}
           cooler={{ count: player.inventory.length, cap: COOLER_CAP, full: player.coolerFull, items: player.inventory }}
         />
       )}

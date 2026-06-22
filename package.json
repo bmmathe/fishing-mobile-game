@@ -15,6 +15,7 @@
     "sim:gear": "node scripts/gearsim.ts",
     "sim:boat": "node scripts/boatsim.ts",
     "sim:bait": "node scripts/baitsim.ts",
+    "sim:hook": "node scripts/hooksim.ts",
     "cap:sync": "npm run build && cap sync",
     "cap:android": "npm run build && cap sync android && cap open android",
     "cap:ios": "npm run build && cap sync ios && cap open ios"

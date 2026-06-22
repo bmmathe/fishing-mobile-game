@@ -60,10 +60,10 @@ Base values shared by every species in the band (individual fish tweak a few via
 
 | Tier | strength | runStrength | runChance | agility | startDistance | hookHold |
 |---|---|---|---|---|---|---|
-| 1 | 0.30 | 1.20 | 0.45 | 2.2 | 11 | 0.85 |
-| 2 | 0.42 | 1.35 | 0.52 | 2.7 | 15 | 0.81 |
-| 3 | 0.70 | 1.55 | 0.62 | 3.1 | 19 | 0.82 |
-| 4 | 0.76 | 1.70 | 0.70 | 3.6 | 23 | 0.90 |
+| 1 | 0.30 | 1.20 | 0.45 | 2.2 | 11 | 0.26 |
+| 2 | 0.42 | 1.35 | 0.52 | 2.7 | 15 | 0.16 |
+| 3 | 0.70 | 1.55 | 0.62 | 3.1 | 19 | 0.35 |
+| 4 | 0.76 | 1.70 | 0.70 | 3.6 | 23 | 0.82 |
 | 5 | 0.90 | 1.85 | 0.76 | 4.1 | 27 | 0.95 |
 | 6 | 1.05 | 2.00 | 0.80 | 4.5 | 32 | 0.98 |
 | 7 | 1.25 | 2.20 | 0.84 | 5.0 | 38 | 0.99 |
@@ -170,6 +170,10 @@ These systems are **built** and consume the catalog data. (Details in the README
   - Freshwater: T1 minnows/shiners → T2–3 · T2 shad → T3–4 · **T3 cisco/alewife → T6–8**
   - Saltwater: T1 anchovy/sand-eel → T2–3 · T2 menhaden/sardine → T3–5 · **T3 goggle-eye/threadfin → T7–8**
   - Bait does **not** make reeling easier (gear does). Validate: `npm run sim:bait`.
+- **Hooks** ([hooks.ts](../src/game/hooks.ts), `hook.forTiers`): buy specialty hooks in the shop,
+  equip one at a time. Each hook adds **`holdBonus`** to `hookHold` for matching tiers only,
+  reducing shake-offs during runs. Hooks are **consumed when the line snaps** (restock at the shop).
+  - Panfish (T1–2), Wide Gap (T3–4), Circle (T4–6), Offshore (T6–8) — validate: `npm run sim:hook`.
 - **Gear: line + pole** ([gear.ts](../src/game/gear.ts) `LINE_TIERS`/`POLE_TIERS`): the starter line
   is deliberately weak (`maxTension 0.78`); buying **line tiers** raises `maxTension`, the lever that
   unlocks the ~0% tier 6–8 fish (line steps 0.78 → 10). **Pole tiers** raise reel speed. Validate:
@@ -185,6 +189,8 @@ These systems are **built** and consume the catalog data. (Details in the README
 ```bash
 npm run sim    # plays each species with a skilled + reckless bot,
                # prints per-tier win-rate vs target with PASS/FAIL
+               # optional: --hook <id> (e.g. panfish, wide-gap)
+npm run sim:hook  # hook catalog + win-rate matrix vs targets
 ```
 
 Adjust the per-tier `BAND` values (and per-species overrides) in

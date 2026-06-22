@@ -15,6 +15,8 @@ export interface BaitBarProps {
   onEquip: (id: string | null) => void;
 }
 
+export type HookBarProps = BaitBarProps;
+
 export interface CoolerInfo {
   count: number;
   cap: number;
@@ -27,11 +29,13 @@ export function FishingHud({
   store,
   onExit,
   bait,
+  hooks,
   cooler,
 }: {
   store: FishingStore;
   onExit?: () => void;
   bait?: BaitBarProps;
+  hooks?: HookBarProps;
   cooler?: CoolerInfo;
 }) {
   // Re-render on every throttled store notify.
@@ -165,7 +169,7 @@ export function FishingHud({
       {/* Bottom: tier picker + cast · wait panel · or the control stick */}
       <div style={ui.bottom}>
         {showCast ? (
-          <CastPanel store={store} bait={bait} coolerFull={cooler?.full ?? false} />
+          <CastPanel store={store} bait={bait} hooks={hooks} coolerFull={cooler?.full ?? false} />
         ) : waiting ? (
           <WaitPanel store={store} />
         ) : (
@@ -258,7 +262,17 @@ function Meter({ label, pct, color }: { label: string; pct: number; color: strin
 }
 
 /** Idle screen: the spot's name + Cast. Dev tier/water selectors gated behind DEV. */
-function CastPanel({ store, bait, coolerFull }: { store: FishingStore; bait?: BaitBarProps; coolerFull: boolean }) {
+function CastPanel({
+  store,
+  bait,
+  hooks,
+  coolerFull,
+}: {
+  store: FishingStore;
+  bait?: BaitBarProps;
+  hooks?: HookBarProps;
+  coolerFull: boolean;
+}) {
   useSyncExternalStore(store.subscribe, store.getVersion);
   const spot = store.currentSpot;
   const tier = getTier(store.selectedTier);
@@ -288,6 +302,23 @@ function CastPanel({ store, bait, coolerFull }: { store: FishingStore; bait?: Ba
               key={o.id}
               style={{ ...ui.baitChip, ...(bait.equippedId === o.id ? ui.baitChipActive : null) }}
               onClick={() => bait.onEquip(o.id)}
+              title={o.hint}
+            >
+              {o.name} ×{o.count}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Hook selector */}
+      {hooks && hooks.options.length > 0 && (
+        <div style={ui.baitRow}>
+          <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.75, width: "100%", textAlign: "center" }}>🪝 Hook</span>
+          {hooks.options.map((o) => (
+            <button
+              key={o.id}
+              style={{ ...ui.baitChip, ...(hooks.equippedId === o.id ? ui.baitChipActive : null) }}
+              onClick={() => hooks.onEquip(o.id)}
               title={o.hint}
             >
               {o.name} ×{o.count}

@@ -1,6 +1,7 @@
 import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import { BOAT_TIERS, LINE_TIERS, POLE_TIERS } from "./gear";
 import { WORMS } from "./bait";
+import { HOOKS } from "./hooks";
 import { COOLER_CAP, type PlayerStore } from "./playerStore";
 
 /** The Tackle Shop: sell your catch, manage bait, and buy gear. Reached from the map. */
@@ -135,6 +136,7 @@ function GearTab({ store }: { store: PlayerStore }) {
         currency={store.currency}
         onBuy={() => store.buyPole()}
       />
+      <HooksSection store={store} />
       <GearTrack
         label="Boat — drive the water to deep-water spots"
         tiers={BOAT_TIERS.map((t) => ({ name: t.name, stat: `${t.ocean ? "lake + ocean" : "lake only"} · speed ${t.speed.toFixed(1)}`, price: t.price }))}
@@ -142,6 +144,56 @@ function GearTab({ store }: { store: PlayerStore }) {
         currency={store.currency}
         onBuy={() => store.buyBoat()}
       />
+    </div>
+  );
+}
+
+function HooksSection({ store }: { store: PlayerStore }) {
+  return (
+    <div style={ui.track}>
+      <div style={ui.trackLabel}>Hooks — reduce shake-offs for matching tiers (lost on line snap)</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {HOOKS.map((h) => {
+          const stock = store.hookBox[h.id]?.count ?? 0;
+          const equipped = store.equippedHookId === h.id;
+          const affordable = store.currency >= h.price;
+          const tierLabel = `T${Math.min(...h.forTiers)}–T${Math.max(...h.forTiers)}`;
+          const stat =
+            (h.holdBonus > 0 ? `+${(h.holdBonus * 100).toFixed(0)}% hold` : "baseline") +
+            (stock > 0 ? ` · ×${stock} in box` : "");
+          return (
+            <div key={h.id} style={ui.hookRow}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700 }}>{h.name}</div>
+                <div style={ui.sub}>
+                  {tierLabel} · {stat}
+                  {h.blurb ? ` · ${h.blurb}` : ""}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                {stock > 0 && (
+                  <button
+                    style={{ ...ui.baitBtn, ...(equipped ? { background: "#5aa9bd", color: "#fff" } : null) }}
+                    onClick={() => store.equipHook(h.id)}
+                  >
+                    {equipped ? "Equipped" : "Equip"}
+                  </button>
+                )}
+                <button
+                  style={{ ...ui.buyBtn, ...(h.price === 0 || affordable ? null : ui.buyDisabled) }}
+                  disabled={h.price > 0 && !affordable}
+                  onClick={() => store.buyHook(h.id)}
+                >
+                  <div style={{ fontWeight: 700 }}>{h.price === 0 ? "Restock" : "Buy 1"}</div>
+                  <div style={{ fontSize: 11 }}>
+                    {h.price === 0 ? "Free" : `$${h.price}`}
+                  </div>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -220,6 +272,7 @@ const ui: Record<string, CSSProperties> = {
   track: { background: "rgba(255,255,255,0.55)", borderRadius: 16, padding: 14, marginBottom: 4 },
   trackLabel: { fontSize: 12, fontWeight: 600, opacity: 0.8, marginBottom: 10 },
   trackRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  hookRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "rgba(255,255,255,0.45)", borderRadius: 12, padding: "10px 12px" },
   buyBtn: { border: "none", borderRadius: 14, padding: "10px 16px", color: "#fff", background: "#5aa9bd", cursor: "pointer", textAlign: "right" },
   buyDisabled: { background: "#aab7b8", cursor: "not-allowed" },
   maxed: { fontWeight: 800, color: "#8a9095", padding: "10px 16px" },
