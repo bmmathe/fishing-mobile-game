@@ -1,4 +1,4 @@
-package com.tidalties.app;
+package com.bitforgeventures.fishinggame;
 
 import com.getcapacitor.BridgeActivity;
 

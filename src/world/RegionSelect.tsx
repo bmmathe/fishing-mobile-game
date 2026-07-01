@@ -6,6 +6,7 @@ import { palette } from "../scene/palette";
 import { MapOrbitControls } from "./MapControls";
 import { REGIONS, type Region } from "./regions";
 import { Fish, Lake, Mountain, OilDerrick, PalmTree, PineTree } from "./MapDecor";
+import { mapBelowControlsTop } from "./mapLayout";
 
 const DEPTH = 0.5; // region slab thickness (low-poly)
 
@@ -73,7 +74,7 @@ export function RegionSelect({
         <MapOrbitControls target={[0, 0, 1]} maxPolarAngle={Math.PI / 2.4} minDistance={16} maxDistance={42} />
       </Canvas>
 
-      <div style={overlay.title}>
+      <div style={{ ...overlay.title, ...(mode === "travel" ? { top: mapBelowControlsTop(16) } : null) }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>United States</h1>
         <p style={{ fontSize: 13, opacity: 0.8, margin: "2px 0 0" }}>
           {mode === "start" ? "Choose your starting region" : "Travel — choose a region"}

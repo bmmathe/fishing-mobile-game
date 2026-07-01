@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.tidalties.app",
-  appName: "Tidal Ties",
+  appId: "com.bitforgeventures.fishinggame",
+  appName: "World of Fishing",
   // Vite builds the web app into dist/; Capacitor copies this into the native
   // shell on `cap sync`.
   webDir: "dist",

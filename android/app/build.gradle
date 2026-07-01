@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.tidalties.app"
+    namespace "com.bitforgeventures.fishinggame"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.tidalties.app"
+        applicationId "com.bitforgeventures.fishinggame"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

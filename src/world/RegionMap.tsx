@@ -1,10 +1,11 @@
 import { useState, type CSSProperties } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import { palette } from "../scene/palette";
 import { MapOrbitControls } from "./MapControls";
 import { SpotCard } from "./SpotCard";
 import { BOAT_BODIES, type Region, type Spot } from "./regions";
+import { MAP_PLAYER_CONTROLS_OFFSET } from "./mapLayout";
 
 /**
  * Level 2 of the overworld: a low-poly diorama of one region. Land on the west,
@@ -66,7 +67,13 @@ export function RegionMap({
         {landSpots
           .filter((s) => s.water === "fresh")
           .map((s) => (
-            <mesh key={`wb-${s.id}`} position={[s.pos[0], 0.32, s.pos[1]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <mesh
+              key={`wb-${s.id}`}
+              position={[s.pos[0], 0.32, s.pos[1]]}
+              rotation={[-Math.PI / 2, 0, 0]}
+              receiveShadow
+              raycast={() => null}
+            >
               <circleGeometry args={[s.body === "stream" ? 0.7 : s.body === "river" ? 1.0 : 1.6, 20]} />
               <meshStandardMaterial color={palette.waterDeep} flatShading roughness={0.6} />
             </mesh>
@@ -88,7 +95,7 @@ export function RegionMap({
         <button style={ui.backBtn} onClick={onTravel}>
           🗺 Travel
         </button>
-        <div style={ui.regionName}>{region.name}</div>
+        <div style={ui.regionTitle}>{region.name}</div>
       </div>
 
       {selected && (
@@ -114,25 +121,36 @@ function SpotPin({ spot, onSelect }: { spot: Spot; onSelect: (s: Spot) => void }
   const base = spot.water === "fresh" ? "#4f8f74" : "#3f8fa0";
   const color = locked ? "#8a8f96" : base;
 
+  const select = (e?: { stopPropagation?: () => void }) => {
+    e?.stopPropagation?.();
+    onSelect(spot);
+  };
+  const enter = () => {
+    setHover(true);
+    document.body.style.cursor = "pointer";
+  };
+  const leave = () => {
+    setHover(false);
+    document.body.style.cursor = "auto";
+  };
+  const hitHandlers = {
+    onClick: select,
+    onPointerDown: (e: ThreeEvent<PointerEvent>) => e.stopPropagation(),
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation();
+      enter();
+    },
+    onPointerOut: leave,
+  };
+
   return (
     <group position={[x, 0.45, z]} scale={hover ? 1.18 : 1}>
-      <mesh
-        position={[0, 0.5, 0]}
-        castShadow
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(spot);
-        }}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          setHover(true);
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          setHover(false);
-          document.body.style.cursor = "auto";
-        }}
-      >
+      {/* Invisible sphere — only the thin pole had handlers before; this is the mobile tap target. */}
+      <mesh position={[0, 0.75, 0]} {...hitHandlers}>
+        <sphereGeometry args={[1.05, 12, 10]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, 0.5, 0]} castShadow>
         <cylinderGeometry args={[0.14, 0.14, 1, 8]} />
         <meshStandardMaterial color={color} flatShading roughness={1} />
       </mesh>
@@ -141,7 +159,12 @@ function SpotPin({ spot, onSelect }: { spot: Spot; onSelect: (s: Spot) => void }
         <meshStandardMaterial color={color} flatShading roughness={1} />
       </mesh>
       <Html position={[0, 1.7, 0]} center distanceFactor={20} style={{ pointerEvents: "none" }}>
-        <div style={ui.pinLabel}>
+        <div
+          style={{ ...ui.pinLabel, pointerEvents: "auto", cursor: "pointer" }}
+          onClick={select}
+          onPointerEnter={enter}
+          onPointerLeave={leave}
+        >
           {locked ? "🔒 " : ""}
           {spot.name}
         </div>
@@ -156,15 +179,14 @@ const ui: Record<string, CSSProperties> = {
     top: "max(14px, env(safe-area-inset-top))",
     left: 0,
     right: 0,
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
     padding: "0 16px",
     fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
     color: "#3c5a57",
+    pointerEvents: "none",
   },
   backBtn: {
     pointerEvents: "auto",
+    display: "block",
     border: "none",
     borderRadius: 18,
     padding: "8px 16px",
@@ -175,7 +197,13 @@ const ui: Record<string, CSSProperties> = {
     boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
     cursor: "pointer",
   },
-  regionName: { fontSize: 18, fontWeight: 800, textShadow: "0 1px 3px rgba(255,255,255,0.6)" },
+  regionTitle: {
+    marginTop: MAP_PLAYER_CONTROLS_OFFSET,
+    fontSize: 18,
+    fontWeight: 800,
+    textShadow: "0 1px 3px rgba(255,255,255,0.6)",
+    pointerEvents: "none",
+  },
   pinLabel: {
     background: "rgba(255,255,255,0.85)",
     borderRadius: 7,

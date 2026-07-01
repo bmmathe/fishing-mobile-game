@@ -22,7 +22,7 @@ export function HudOverlay() {
     >
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: 0.5 }}>
-          Tidal Ties
+          World of Fishing
         </h1>
         <p style={{ fontSize: 13, opacity: 0.8 }}>low-poly aesthetic preview</p>
       </div>

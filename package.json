@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Tidal Ties - a social fishing game (low-poly 3D, mobile via Capacitor)",
+  "description": "World of Fishing - a social fishing game (low-poly 3D, mobile via Capacitor)",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
