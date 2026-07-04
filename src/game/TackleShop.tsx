@@ -2,6 +2,8 @@ import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import { BOAT_TIERS, LINE_TIERS, POLE_TIERS } from "./gear";
 import { WORMS } from "./bait";
 import { HOOKS } from "./hooks";
+import { CatchArt } from "../fishing/CatchArt";
+import { sfx } from "../audio/sfx";
 import { COOLER_CAP, type PlayerStore } from "./playerStore";
 
 /** The Tackle Shop: sell your catch, manage bait, and buy gear. Reached from the map. */
@@ -21,13 +23,13 @@ export function TackleShop({ store, onBack }: { store: PlayerStore; onBack: () =
       </div>
 
       <div style={ui.tabs}>
-        <button style={{ ...ui.tab, ...(tab === "sell" ? ui.tabActive : null) }} onClick={() => setTab("sell")}>
+        <button style={{ ...ui.tab, ...(tab === "sell" ? ui.tabActive : null) }} onClick={() => { sfx.uiTap(); setTab("sell"); }}>
           Cooler {store.inventory.length}/{COOLER_CAP}
         </button>
-        <button style={{ ...ui.tab, ...(tab === "bait" ? ui.tabActive : null) }} onClick={() => setTab("bait")}>
+        <button style={{ ...ui.tab, ...(tab === "bait" ? ui.tabActive : null) }} onClick={() => { sfx.uiTap(); setTab("bait"); }}>
           Bait ({baitCount})
         </button>
-        <button style={{ ...ui.tab, ...(tab === "gear" ? ui.tabActive : null) }} onClick={() => setTab("gear")}>
+        <button style={{ ...ui.tab, ...(tab === "gear" ? ui.tabActive : null) }} onClick={() => { sfx.uiTap(); setTab("gear"); }}>
           Gear
         </button>
       </div>
@@ -47,22 +49,27 @@ function SellTab({ store }: { store: PlayerStore }) {
   const items = store.inventory.map((f, i) => ({ f, i })).reverse();
   return (
     <>
-      <button style={ui.sellAll} onClick={() => store.sellAll()}>
+      <button style={ui.sellAll} onClick={() => { sfx.coin(); store.sellAll(); }}>
         Sell all (+${store.inventoryValue.toLocaleString()})
       </button>
       <div style={ui.list}>
         {items.map(({ f, i }) => (
           <div key={i} style={ui.row}>
-            <div>
-              <div style={{ fontWeight: 700 }}>{f.name}</div>
-              <div style={ui.sub}>
-                T{f.tier} · {f.weightKg} kg · {f.water === "fresh" ? "🟦" : "🌊"}
-                {f.bait ? " · 🪱 bait" : ""}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <span style={ui.thumb}>
+                <CatchArt name={f.name} size={64} />
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</div>
+                <div style={ui.sub}>
+                  T{f.tier} · {f.weightKg} kg · {f.water === "fresh" ? "🟦" : "🌊"}
+                  {f.bait ? " · 🪱 bait" : ""}
+                </div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {f.bait && (
-                <button style={ui.baitBtn} onClick={() => store.stockBait(i)}>
+                <button style={ui.baitBtn} onClick={() => { sfx.equip(); store.stockBait(i); }}>
                   → Bait
                 </button>
               )}
@@ -70,11 +77,13 @@ function SellTab({ store }: { store: PlayerStore }) {
                 style={{ ...ui.baitBtn, ...(store.trophyWallFull ? ui.disabled : null) }}
                 disabled={store.trophyWallFull}
                 title={store.trophyWallFull ? "Trophy wall full" : "Mount on the Trophy Wall"}
-                onClick={() => store.mountTrophy(i)}
+                onClick={() => {
+                  if (store.mountTrophy(i)) sfx.trophy();
+                }}
               >
                 🏆
               </button>
-              <button style={ui.sellOne} onClick={() => store.sellOne(i)}>
+              <button style={ui.sellOne} onClick={() => { sfx.coin(); store.sellOne(i); }}>
                 +${f.value}
               </button>
             </div>
@@ -89,7 +98,13 @@ function BaitTab({ store }: { store: PlayerStore }) {
   const stacks = Object.values(store.baitBox);
   return (
     <>
-      <button style={{ ...ui.sellAll, background: "#5aa9bd" }} onClick={() => store.buyWorms(5)}>
+      <button
+        style={{ ...ui.sellAll, background: "#5aa9bd" }}
+        onClick={() => {
+          if (store.buyWorms(5)) sfx.buy();
+          else sfx.denied();
+        }}
+      >
         Buy 5 Worms (−${(WORMS.price ?? 0) * 5})
       </button>
       {stacks.length === 0 ? (
@@ -108,7 +123,7 @@ function BaitTab({ store }: { store: PlayerStore }) {
                   {def.waitFactor < 1 ? ` · ↓wait ×${def.waitFactor}` : ""}
                 </div>
               </div>
-              <button style={ui.sellOne} onClick={() => store.sellBait(def.id, 1)}>
+              <button style={ui.sellOne} onClick={() => { sfx.coin(); store.sellBait(def.id, 1); }}>
                 Sell 1
               </button>
             </div>
@@ -127,14 +142,14 @@ function GearTab({ store }: { store: PlayerStore }) {
         tiers={LINE_TIERS.map((t) => ({ name: t.name, stat: `max tension ${t.maxTension.toFixed(2)}`, price: t.price }))}
         owned={store.lineTier}
         currency={store.currency}
-        onBuy={() => store.buyLine()}
+        onBuy={() => (store.buyLine() ? sfx.buy() : sfx.denied())}
       />
       <GearTrack
         label="Pole — faster reel-in"
         tiers={POLE_TIERS.map((t) => ({ name: t.name, stat: `reel ×${t.reelMult.toFixed(2)}`, price: t.price }))}
         owned={store.poleTier}
         currency={store.currency}
-        onBuy={() => store.buyPole()}
+        onBuy={() => (store.buyPole() ? sfx.buy() : sfx.denied())}
       />
       <HooksSection store={store} />
       <GearTrack
@@ -142,7 +157,7 @@ function GearTab({ store }: { store: PlayerStore }) {
         tiers={BOAT_TIERS.map((t) => ({ name: t.name, stat: `${t.ocean ? "lake + ocean" : "lake only"} · speed ${t.speed.toFixed(1)}`, price: t.price }))}
         owned={store.boatTier}
         currency={store.currency}
-        onBuy={() => store.buyBoat()}
+        onBuy={() => (store.buyBoat() ? sfx.buy() : sfx.denied())}
       />
     </div>
   );
@@ -174,7 +189,7 @@ function HooksSection({ store }: { store: PlayerStore }) {
                 {stock > 0 && (
                   <button
                     style={{ ...ui.baitBtn, ...(equipped ? { background: "#5aa9bd", color: "#fff" } : null) }}
-                    onClick={() => store.equipHook(h.id)}
+                    onClick={() => { sfx.equip(); store.equipHook(h.id); }}
                   >
                     {equipped ? "Equipped" : "Equip"}
                   </button>
@@ -182,7 +197,7 @@ function HooksSection({ store }: { store: PlayerStore }) {
                 <button
                   style={{ ...ui.buyBtn, ...(h.price === 0 || affordable ? null : ui.buyDisabled) }}
                   disabled={h.price > 0 && !affordable}
-                  onClick={() => store.buyHook(h.id)}
+                  onClick={() => (store.buyHook(h.id) ? sfx.buy() : sfx.denied())}
                 >
                   <div style={{ fontWeight: 700 }}>{h.price === 0 ? "Restock" : "Buy 1"}</div>
                   <div style={{ fontSize: 11 }}>
@@ -264,7 +279,8 @@ const ui: Record<string, CSSProperties> = {
   empty: { textAlign: "center", opacity: 0.7, marginTop: 40, fontSize: 15 },
   sellAll: { width: "100%", border: "none", borderRadius: 16, padding: "13px", fontSize: 16, fontWeight: 700, color: "#fff", background: "#3f9e6a", cursor: "pointer", marginBottom: 12 },
   list: { display: "flex", flexDirection: "column", gap: 8 },
-  row: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.7)", borderRadius: 12, padding: "10px 14px" },
+  row: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(255,255,255,0.7)", borderRadius: 12, padding: "8px 14px" },
+  thumb: { flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 38, background: "#dceef0", borderRadius: 10, overflow: "hidden" },
   sub: { fontSize: 12, opacity: 0.7 },
   sellOne: { border: "none", borderRadius: 12, padding: "8px 14px", fontSize: 14, fontWeight: 700, color: "#fff", background: "#3f9e6a", cursor: "pointer" },
   baitBtn: { border: "none", borderRadius: 12, padding: "8px 12px", fontSize: 13, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", cursor: "pointer" },

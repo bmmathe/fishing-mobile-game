@@ -24,6 +24,7 @@ const BODY_LABEL: Record<string, string> = {
 export function SpotCard({
   spot,
   footFee,
+  boatFee,
   currency,
   offersBoat,
   canBoat,
@@ -33,6 +34,7 @@ export function SpotCard({
 }: {
   spot: Spot;
   footFee: number;
+  boatFee: number;
   currency: number;
   offersBoat: boolean;
   canBoat: boolean;
@@ -43,6 +45,7 @@ export function SpotCard({
   const tiers = spot.tiers.map((t) => t.tier);
   const tierRange = `T${Math.min(...tiers)}–T${Math.max(...tiers)}`;
   const canAffordFoot = footFee === 0 || currency >= footFee;
+  const canAffordBoat = currency >= boatFee;
 
   return (
     <div style={card.backdrop} onClick={onClose}>
@@ -67,14 +70,16 @@ export function SpotCard({
         )}
 
         {offersBoat &&
-          (canBoat ? (
-            <button style={{ ...card.fishBtn, background: "#5aa9bd" }} onClick={() => onBoat(spot)}>
-              🚤 Take the boat out
-            </button>
-          ) : (
+          (!canBoat ? (
             <div style={card.locked}>
               🔒 Take the boat out — needs {spot.water === "salt" ? "an ocean-capable" : "a"} boat
             </div>
+          ) : canAffordBoat ? (
+            <button style={{ ...card.fishBtn, background: "#5aa9bd" }} onClick={() => onBoat(spot)}>
+              🚤 Take the boat out · ${boatFee}
+            </button>
+          ) : (
+            <div style={card.locked}>🔒 Not enough money to take the boat out (${boatFee})</div>
           ))}
 
         <button style={card.closeBtn} onClick={onClose}>

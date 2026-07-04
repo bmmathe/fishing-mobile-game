@@ -19,12 +19,15 @@ import {
 import { DEFAULT_HOLE, QUALITY_CURVES, rollWaitTime, type FishingHole } from "./fishingHoles";
 import { pickTier, type Spot } from "../world/regions";
 import { effectiveHookHold, type HookDef } from "../game/hooks";
+import { sfx } from "../audio/sfx";
 
 export interface Catch {
   name: string;
   tier: number;
+  water: Water;
   weightKg: number;
   isJunk: boolean;
+  bait?: { grade: number; forTiers: number[] };
 }
 
 /**
@@ -70,13 +73,19 @@ export class FishingStore {
   currentSpot: Spot | null = null;
   /** The fish currently hooked / about to be cast for. */
   private _fish: FishDef;
-  /** Most recent landed catch, for the reveal. */
+  /**
+   * A landed catch awaiting the player's decision (drives the catch modal).
+   * Fish are banked via keepCatch(); junk is discarded via dismissCatch().
+   */
   lastCatch: Catch | null = null;
 
   private version = 0;
   private listeners = new Set<() => void>();
   private sinceNotify = 0;
   private pendingHook = false;
+  // Edge detection for one-shot sounds (nibble tell, run start).
+  private wasNibbling = false;
+  private wasRunning = false;
 
   constructor(line: LineSpec, tier = 1, water: Water = "fresh") {
     this.line = line;
@@ -212,8 +221,30 @@ export class FishingStore {
   }
 
   cast() {
-    if (!this.idle() || this.castBlocked()) return;
+    // A pending catch must be resolved (kept/trashed) before the next cast.
+    if (!this.idle() || this.castBlocked() || this.lastCatch) return;
     this.beginCast();
+  }
+
+  /** Bank the pending catch (junk is never banked) and close the reveal. */
+  keepCatch() {
+    const c = this.lastCatch;
+    if (!c) return;
+    this.lastCatch = null;
+    if (!c.isJunk) {
+      this.onCatch?.({ name: c.name, tier: c.tier, water: c.water, weightKg: c.weightKg, bait: c.bait });
+      sfx.keep();
+    }
+    this.notify();
+  }
+
+  /** Throw the pending catch away (junk → trash, fish → released). */
+  dismissCatch() {
+    const c = this.lastCatch;
+    if (!c) return;
+    this.lastCatch = null;
+    if (c.isJunk) sfx.trash();
+    this.notify();
   }
 
   /** Re-throw: bail on a slow bite and roll a fresh fish + wait. */
@@ -236,6 +267,7 @@ export class FishingStore {
     }
     const wait = rollWaitTime(this.currentHole) * (baited ? this.baitWaitFactor : 1);
     this.state = startCast(this._fish, wait);
+    sfx.cast();
     // One bait per bite — only a real fish (not junk) consumes it.
     if (baited && this._fish.kind !== "junk") this.consumeBait?.();
     this.releaseInput();
@@ -267,28 +299,49 @@ export class FishingStore {
     // Clamp dt so a tab-out / long frame can't teleport the fight.
     stepFight(this.state, input, this._fish, this.line, Math.min(dt, 1 / 20));
 
+    // --- sound: phase / event edges ---
+    const s = this.state;
+    if (s.phase === "bite" && prevPhase === "waiting") sfx.bite();
+    if (s.phase === "fighting" && prevPhase !== "fighting") sfx.hookset();
+    const nib = this.nibbling;
+    if (nib && !this.wasNibbling) sfx.nibble();
+    this.wasNibbling = nib;
+    if (s.running && !this.wasRunning) sfx.run();
+    this.wasRunning = s.running;
+    if (s.phase === "fighting") {
+      sfx.reelStep(this.input.reel, dt);
+      sfx.dangerStep(this.danger, dt);
+    }
+
     // Line snap destroys the equipped hook (consumable tackle).
     if (this.state.phase === "lost" && prevPhase !== "lost" && this.state.message.startsWith("SNAP!")) {
       this.onLineSnap?.();
     }
+    if (this.state.phase === "lost" && prevPhase !== "lost") {
+      if (this.state.message.startsWith("SNAP!")) sfx.snap();
+      else sfx.lost();
+    }
 
-    // On a fresh landing, record the catch (junk vs fish differ).
+    // On a fresh landing, stage the catch for the reveal modal. Banking waits
+    // for the player's "Add to Cooler" (keepCatch); junk is trashed instead.
     if (this.state.phase === "landed" && prevPhase !== "landed") {
       const f = this._fish;
       if (f.kind === "junk") {
-        this.lastCatch = { name: f.name, tier: f.tier, weightKg: 0, isJunk: true };
+        this.lastCatch = { name: f.name, tier: f.tier, water: f.water, weightKg: 0, isJunk: true };
         this.state.message = `You hauled in… ${f.name}.`;
+        sfx.landedJunk();
       } else {
         const weightKg = rollWeight(f);
-        this.lastCatch = { name: f.name, tier: f.tier, weightKg, isJunk: false };
-        this.state.message = `Landed a ${weightKg} kg ${f.name}!`;
-        this.onCatch?.({
+        this.lastCatch = {
           name: f.name,
           tier: f.tier,
           water: f.water,
           weightKg,
+          isJunk: false,
           bait: f.bait ? { grade: f.bait.grade, forTiers: f.bait.forTiers } : undefined,
-        });
+        };
+        this.state.message = `Landed a ${weightKg} kg ${f.name}!`;
+        sfx.landedFish(f.tier);
       }
     }
 

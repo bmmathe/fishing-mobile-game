@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { palette } from "../scene/palette";
+import { Cloud, Gull, Islet, Reeds, Rock } from "../world/MapDecor";
 import type { FishingStore } from "./fishingStore";
 
 /** How far out (in world Z) the fish sits at full starting distance. */
@@ -119,29 +120,105 @@ export function FishingScene({ store }: { store: FishingStore }) {
         <meshStandardMaterial color={palette.water} flatShading roughness={0.5} transparent opacity={0.95} />
       </mesh>
 
-      {/* Dock the angler stands on (behind, at the near edge) */}
-      <mesh position={[0, 0.25, -1.2]} castShadow receiveShadow>
-        <boxGeometry args={[6, 0.5, 4]} />
-        <meshStandardMaterial color={palette.boatWood} flatShading roughness={1} />
-      </mesh>
-      <mesh position={[0, -0.05, -1.2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[6, 4]} />
-        <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
-      </mesh>
+      {/* Plank dock the angler stands on (behind, at the near edge) */}
+      <group position={[0, 0, -1.2]}>
+        {/* planks (alternating tones), running across the dock */}
+        {[-1.7, -1.1, -0.5, 0.1, 0.7, 1.3].map((z, i) => (
+          <mesh key={i} position={[0, 0.46, z]} castShadow receiveShadow>
+            <boxGeometry args={[6, 0.09, 0.54]} />
+            <meshStandardMaterial color={i % 2 ? palette.boatWood : "#c09a64"} flatShading roughness={1} />
+          </mesh>
+        ))}
+        {/* skirt + support posts into the water */}
+        <mesh position={[0, 0.18, 0]} receiveShadow>
+          <boxGeometry args={[5.9, 0.5, 3.9]} />
+          <meshStandardMaterial color={palette.dockPost} flatShading roughness={1} />
+        </mesh>
+        {[
+          [-2.8, 1.55],
+          [2.8, 1.55],
+          [-2.8, -1.7],
+          [2.8, -1.7],
+          [0, 1.55],
+        ].map(([px, pz], i) => (
+          <mesh key={i} position={[px, -0.1, pz]} castShadow>
+            <cylinderGeometry args={[0.09, 0.11, 1.1, 6]} />
+            <meshStandardMaterial color={palette.dockPost} flatShading roughness={1} />
+          </mesh>
+        ))}
+        {/* bait bucket + tackle box props */}
+        <mesh position={[-1.1, 0.66, 0.3]} castShadow>
+          <cylinderGeometry args={[0.18, 0.15, 0.3, 9]} />
+          <meshStandardMaterial color={palette.hullTrim} flatShading roughness={1} />
+        </mesh>
+        <mesh position={[1.2, 0.62, 0.5]} castShadow>
+          <boxGeometry args={[0.42, 0.22, 0.26]} />
+          <meshStandardMaterial color={palette.buoyRed} flatShading roughness={1} />
+        </mesh>
+        <mesh position={[1.2, 0.75, 0.5]}>
+          <boxGeometry args={[0.44, 0.05, 0.28]} />
+          <meshStandardMaterial color="#b23f39" flatShading roughness={1} />
+        </mesh>
+      </group>
 
       {/* Angler (stationary) */}
       <group position={[0, 0.5, -0.8]}>
-        <mesh position={[0, 0.55, 0]} castShadow>
-          <cylinderGeometry args={[0.32, 0.4, 1.0, 8]} />
+        {/* legs + boots */}
+        <mesh position={[-0.13, 0.12, 0]} castShadow>
+          <cylinderGeometry args={[0.09, 0.1, 0.42, 6]} />
+          <meshStandardMaterial color="#7a6a52" flatShading roughness={1} />
+        </mesh>
+        <mesh position={[0.13, 0.12, 0]} castShadow>
+          <cylinderGeometry args={[0.09, 0.1, 0.42, 6]} />
+          <meshStandardMaterial color="#7a6a52" flatShading roughness={1} />
+        </mesh>
+        <mesh position={[-0.13, -0.05, 0.05]} castShadow>
+          <boxGeometry args={[0.14, 0.1, 0.26]} />
+          <meshStandardMaterial color="#5b5346" flatShading roughness={1} />
+        </mesh>
+        <mesh position={[0.13, -0.05, 0.05]} castShadow>
+          <boxGeometry args={[0.14, 0.1, 0.26]} />
+          <meshStandardMaterial color="#5b5346" flatShading roughness={1} />
+        </mesh>
+        {/* torso: fishing vest over a shirt */}
+        <mesh position={[0, 0.62, 0]} castShadow>
+          <cylinderGeometry args={[0.3, 0.36, 0.75, 8]} />
           <meshStandardMaterial color={palette.roofBlue} flatShading roughness={1} />
         </mesh>
+        <mesh position={[0, 0.72, 0]} castShadow>
+          <cylinderGeometry args={[0.32, 0.35, 0.45, 8]} />
+          <meshStandardMaterial color={palette.roofSage} flatShading roughness={1} />
+        </mesh>
+        {/* arms reaching toward the rod grip */}
+        <mesh position={[0.26, 0.82, 0.14]} rotation={[-0.7, 0, -0.5]} castShadow>
+          <cylinderGeometry args={[0.07, 0.08, 0.5, 6]} />
+          <meshStandardMaterial color={palette.roofBlue} flatShading roughness={1} />
+        </mesh>
+        <mesh position={[-0.2, 0.85, 0.18]} rotation={[-0.9, 0, 0.55]} castShadow>
+          <cylinderGeometry args={[0.07, 0.08, 0.52, 6]} />
+          <meshStandardMaterial color={palette.roofBlue} flatShading roughness={1} />
+        </mesh>
+        {/* hands on the grip */}
+        <mesh position={[0.32, 0.98, 0.28]} castShadow>
+          <sphereGeometry args={[0.08, 8, 6]} />
+          <meshStandardMaterial color="#e8c9a4" flatShading roughness={1} />
+        </mesh>
+        <mesh position={[0.06, 1.02, 0.33]} castShadow>
+          <sphereGeometry args={[0.08, 8, 6]} />
+          <meshStandardMaterial color="#e8c9a4" flatShading roughness={1} />
+        </mesh>
+        {/* head */}
         <mesh position={[0, 1.25, 0]} castShadow>
           <sphereGeometry args={[0.27, 12, 10]} />
-          <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
+          <meshStandardMaterial color="#e8c9a4" flatShading roughness={1} />
         </mesh>
-        {/* simple hat */}
-        <mesh position={[0, 1.45, 0]} castShadow>
-          <coneGeometry args={[0.34, 0.3, 10]} />
+        {/* bucket hat: brim + crown */}
+        <mesh position={[0, 1.42, 0]} castShadow>
+          <cylinderGeometry args={[0.42, 0.46, 0.06, 10]} />
+          <meshStandardMaterial color={palette.roofSage} flatShading roughness={1} />
+        </mesh>
+        <mesh position={[0, 1.52, 0]} castShadow>
+          <cylinderGeometry args={[0.24, 0.3, 0.22, 10]} />
           <meshStandardMaterial color={palette.roofSage} flatShading roughness={1} />
         </mesh>
 
@@ -167,19 +244,46 @@ export function FishingScene({ store }: { store: FishingStore }) {
 
       {/* Fish marker / bobber + ripple */}
       <group ref={fishRef}>
+        {/* top half: neutral red while waiting, recolored to the species when hooked */}
         <mesh ref={fishBodyRef} position={[0, 0.08, 0]} castShadow>
           <sphereGeometry args={[0.16, 10, 8]} />
           <meshStandardMaterial color={RED} flatShading roughness={1} />
         </mesh>
-        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <sphereGeometry args={[0.1, 8, 6]} />
+        {/* white lower half + antenna: classic two-tone float */}
+        <mesh position={[0, 0.04, 0]}>
+          <sphereGeometry args={[0.14, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2]} />
           <meshStandardMaterial color={palette.sail} flatShading roughness={1} />
+        </mesh>
+        <mesh position={[0, 0.26, 0]}>
+          <cylinderGeometry args={[0.018, 0.018, 0.1, 5]} />
+          <meshStandardMaterial color={palette.sail} flatShading roughness={1} />
+        </mesh>
+        {/* dark shape under the surface — "something's down there" */}
+        <mesh position={[0, -0.06, 0.15]} rotation={[-Math.PI / 2, 0, 0]} scale={[0.6, 1, 1]}>
+          <circleGeometry args={[0.42, 12]} />
+          <meshBasicMaterial color="#33606e" transparent opacity={0.45} depthWrite={false} />
         </mesh>
         <mesh ref={rippleRef} position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.22, 0.32, 18]} />
           <meshBasicMaterial color={palette.sail} transparent opacity={0.5} side={THREE.DoubleSide} />
         </mesh>
       </group>
+
+      {/* Shore dressing at the dock edges */}
+      <Reeds position={[-3.4, 0.1, 0.9]} scale={1.2} />
+      <Reeds position={[3.5, 0.1, 0.6]} scale={1.0} />
+      <Reeds position={[-4.2, 0.05, -0.4]} scale={0.9} />
+      <Rock position={[4.3, 0.02, -0.2]} cluster />
+      <Rock position={[-4.8, 0.02, 0.4]} scale={0.8} />
+
+      {/* Distant scenery across the water (softened by fog) */}
+      <Islet position={[-12, -0.15, 24]} kind="pine" scale={2.2} />
+      <Islet position={[14, -0.15, 30]} kind="rock" scale={1.8} />
+      <Islet position={[2, -0.15, 38]} kind="pine" scale={2.6} />
+      <Cloud position={[-8, 8, 26]} scale={2.2} range={20} speed={0.15} />
+      <Cloud position={[9, 9.5, 34]} scale={1.8} range={20} speed={0.1} />
+      <Gull position={[-5, 4.5, 14]} radius={3} speed={0.35} />
+      <Gull position={[6, 5.5, 20]} radius={4} speed={0.25} />
     </group>
   );
 }

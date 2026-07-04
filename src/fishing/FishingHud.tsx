@@ -1,7 +1,11 @@
-import { useEffect, useState, useSyncExternalStore, type CSSProperties } from "react";
-import type { FishingStore } from "./fishingStore";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import type { Catch, FishingStore } from "./fishingStore";
 import { TIERS, getTier, type Water } from "./fishCatalog";
 import type { CaughtFish } from "../game/playerStore";
+import { fishValue } from "../game/gear";
+import { CatchArt } from "./CatchArt";
+import { sfx } from "../audio/sfx";
+import { MuteButton } from "../ui/MuteButton";
 import { Stick } from "../ui/Stick";
 
 // Difficulty ramp across the 8 tiers (green → red) + a label per tier.
@@ -31,16 +35,21 @@ export function FishingHud({
   bait,
   hooks,
   cooler,
+  tutorial,
 }: {
   store: FishingStore;
   onExit?: () => void;
   bait?: BaitBarProps;
   hooks?: HookBarProps;
   cooler?: CoolerInfo;
+  tutorial?: boolean;
 }) {
   // Re-render on every throttled store notify.
   useSyncExternalStore(store.subscribe, store.getVersion);
   const [coolerOpen, setCoolerOpen] = useState(false);
+  // Latch the tutorial for the whole session: banking the first fish flips the
+  // prop mid-fight, but the coach should stay up to show its final card.
+  const [tutorialSession] = useState(!!tutorial);
   const s = store.state;
   const tensionPct = Math.min(s.tension / store.line.maxTension, 1.2) * 100;
   const danger = store.danger;
@@ -80,23 +89,30 @@ export function FishingHud({
   const showCast = s.phase === "idle" || s.phase === "landed" || s.phase === "lost";
   const isJunk = store.fish.kind === "junk";
   const nibbling = store.nibbling;
-  // Don't reveal the species while waiting — only once it's hooked.
-  const centerMsg = waiting ? (nibbling ? "Something's nibbling…" : "Waiting for a bite…") : s.message;
+  const pending = store.lastCatch;
+  // Don't reveal the species while waiting — only once it's hooked. The catch
+  // modal replaces the center message while it's open.
+  const centerMsg = pending
+    ? null
+    : waiting
+      ? (nibbling ? "Something's nibbling…" : "Waiting for a bite…")
+      : s.message;
 
   return (
     <div style={ui.root}>
       {/* Leave the spot, back to the map */}
       {onExit && (
-        <button style={ui.mapBtn} onClick={onExit}>
+        <button style={ui.mapBtn} onClick={() => { sfx.uiTap(); onExit(); }}>
           ← Map
         </button>
       )}
+      <MuteButton style={{ position: "absolute", top: "max(14px, env(safe-area-inset-top))", left: 96, zIndex: 2 }} />
 
       {/* Cooler fill — the session limiter; tap to see what you've kept */}
       {cooler && (
         <button
           style={{ ...ui.coolerChip, ...(cooler.full ? ui.coolerFull : null) }}
-          onClick={() => setCoolerOpen(true)}
+          onClick={() => { sfx.uiTap(); setCoolerOpen(true); }}
         >
           🧊 Cooler {cooler.count}/{cooler.cap}
         </button>
@@ -104,6 +120,17 @@ export function FishingHud({
 
       {/* Cooler contents (read-only; selling happens at the shop) */}
       {cooler && coolerOpen && <CoolerView cooler={cooler} onClose={() => setCoolerOpen(false)} />}
+
+      {/* Catch reveal: keep it (cooler) or trash it (junk) before recasting */}
+      {pending && (
+        <CatchModal
+          c={pending}
+          fallbackColor={store.fish.color}
+          coolerFull={cooler?.full ?? false}
+          onKeep={() => store.keepCatch()}
+          onTrash={() => store.dismissCatch()}
+        />
+      )}
 
       {/* Top: progress + stamina (only once fighting) */}
       {fighting && (
@@ -176,6 +203,156 @@ export function FishingHud({
           <ReelStick store={store} />
         )}
       </div>
+
+      {/* First-timer how-to-fish coach */}
+      {tutorialSession && <TutorialCoach store={store} />}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Tutorial coach                                                      */
+/* ------------------------------------------------------------------ */
+
+type TutStep = "cast" | "wait" | "hook" | "reel" | "steer" | "tension" | "land" | "keep" | "done" | "hidden";
+
+/** Order for the little progress dots (terminal steps excluded). */
+const TUT_ORDER: TutStep[] = ["cast", "wait", "hook", "reel", "steer", "tension", "land", "keep"];
+
+const TUT_TEXT: Record<Exclude<TutStep, "hidden">, string> = {
+  cast: "Tap the Cast button to throw your line.",
+  wait: "Now we wait. Watch the bobber — a twitch means a nibble. When it dips hard, that's a BITE!",
+  hook: "BITE! Quick — press the control stick to set the hook!",
+  reel: "You're hooked up! Drag the stick DOWN to reel the fish in.",
+  steer: "The fish pulls side to side. Steer the stick LEFT/RIGHT toward the fish to ease the strain.",
+  tension: "Watch the TENSION bar on the right. In the red the line can SNAP — stop reeling for a moment and let it drop.",
+  land: "You've got the hang of it. Reel it all the way in!",
+  keep: "You landed it! Now decide what to do with it.",
+  done: "🎉 You're a fisher now! Sell catches at the 🎣 Shop and buy stronger line to hook bigger fish. Good luck out there!",
+};
+
+/**
+ * Step-by-step how-to-fish coach for first-timers. Watches the live fight and
+ * advances on real events (bite, reeling, steering, tension spikes), so each
+ * mechanic is taught the moment the player needs it. A lost fish or junk catch
+ * loops back to casting; the tutorial completes when a real fish is kept.
+ */
+function TutorialCoach({ store }: { store: FishingStore }) {
+  useSyncExternalStore(store.subscribe, store.getVersion);
+  const [step, setStep] = useState<TutStep>("cast");
+  const [note, setNote] = useState<string | null>(null); // extra line after a setback
+  const wasJunk = useRef(false);
+  const reelMs = useRef(0);
+  const steerMs = useRef(0);
+  const sawHighTension = useRef(false);
+  const stepStart = useRef(performance.now());
+  const lastT = useRef(performance.now());
+
+  const s = store.state;
+  const phase = s.phase;
+
+  useEffect(() => {
+    const now = performance.now();
+    const dt = Math.min(now - lastT.current, 100);
+    lastT.current = now;
+    const go = (n: TutStep, msg: string | null = null) => {
+      setStep(n);
+      setNote(msg);
+      stepStart.current = now;
+    };
+    const landed = () => {
+      wasJunk.current = !!store.lastCatch?.isJunk;
+      go("keep", wasJunk.current ? "Ha — junk! It happens. Trash it and cast again." : null);
+    };
+
+    // A lost fish at any point → back to casting with encouragement.
+    if (phase === "lost" && step !== "cast" && step !== "done" && step !== "hidden") {
+      go("cast", "It got away — that happens to everyone. Cast again!");
+      return;
+    }
+
+    switch (step) {
+      case "cast":
+        if (phase === "waiting") go("wait");
+        else if (phase === "bite") go("hook");
+        else if (phase === "fighting") go("reel");
+        break;
+      case "wait":
+        if (phase === "bite") go("hook");
+        else if (phase === "fighting") go("reel");
+        else if (phase === "idle") go("cast");
+        break;
+      case "hook":
+        if (phase === "fighting") {
+          reelMs.current = 0;
+          go("reel");
+        } else if (phase === "waiting") go("wait", "Too slow — it spat the hook. Wait for the next bite.");
+        else if (phase === "idle" || phase === "landed") phase === "landed" ? landed() : go("cast");
+        break;
+      case "reel":
+        if (phase === "landed") landed();
+        else if (phase === "fighting") {
+          if (store.input.reel > 0.25) reelMs.current += dt;
+          if (reelMs.current > 900) {
+            steerMs.current = 0;
+            go("steer");
+          }
+        }
+        break;
+      case "steer":
+        if (phase === "landed") landed();
+        else if (phase === "fighting") {
+          if (Math.abs(store.input.steer) > 0.25) steerMs.current += dt;
+          if (steerMs.current > 900) {
+            sawHighTension.current = false;
+            go("tension");
+          }
+        }
+        break;
+      case "tension":
+        if (phase === "landed") landed();
+        else if (phase === "fighting") {
+          const ratio = s.tension / store.line.maxTension;
+          if (ratio > 0.55) sawHighTension.current = true;
+          // learned it (spiked then eased off), or move on after a while
+          if ((sawHighTension.current && ratio < 0.45) || now - stepStart.current > 9000) go("land");
+        }
+        break;
+      case "land":
+        if (phase === "landed") landed();
+        break;
+      case "keep":
+        if (!store.lastCatch) {
+          if (wasJunk.current) go("cast", "Junk goes in the trash. Cast again for a real fish!");
+          else go("done");
+        }
+        break;
+    }
+    // Runs on every throttled store notify (~25/s), which is our tick.
+  });
+
+  if (step === "hidden") return null;
+  const idx = TUT_ORDER.indexOf(step);
+
+  return (
+    <div style={{ ...ui.tutCard, ...(step === "done" ? ui.tutCardDone : null) }}>
+      <div style={ui.tutHeader}>
+        <span>🎓 How to fish</span>
+        {idx >= 0 && (
+          <span style={ui.tutDots}>
+            {TUT_ORDER.map((o, i) => (
+              <span key={o} style={{ ...ui.tutDot, background: i <= idx ? "#e8a83c" : "rgba(90,74,30,0.25)" }} />
+            ))}
+          </span>
+        )}
+      </div>
+      {note && <div style={ui.tutNote}>{note}</div>}
+      <div style={ui.tutText}>{TUT_TEXT[step as Exclude<TutStep, "hidden">]}</div>
+      {step === "done" && (
+        <button style={ui.tutDoneBtn} onClick={() => { sfx.uiTap(); setStep("hidden"); }}>
+          Start fishing!
+        </button>
+      )}
     </div>
   );
 }
@@ -229,6 +406,9 @@ function CoolerView({ cooler, onClose }: { cooler: CoolerInfo; onClose: () => vo
             <div style={ui.coolerList}>
               {items.map((f, i) => (
                 <div key={i} style={ui.coolerRow}>
+                  <span style={ui.coolerThumb}>
+                    <CatchArt name={f.name} size={64} />
+                  </span>
                   <span style={{ ...ui.tierDot, background: tierColor(f.tier) }}>{f.tier}</span>
                   <span style={ui.coolerName}>{f.name}</span>
                   <span style={ui.coolerMeta}>
@@ -245,6 +425,63 @@ function CoolerView({ cooler, onClose }: { cooler: CoolerInfo; onClose: () => vo
             <div style={ui.coolerHint}>Head to the 🎣 Shop to sell or mount these.</div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The catch reveal: species portrait + stats, resolved by one button —
+ * "Add to Cooler" for fish (release if full), "Put in Trash" for junk.
+ */
+function CatchModal({
+  c,
+  fallbackColor,
+  coolerFull,
+  onKeep,
+  onTrash,
+}: {
+  c: Catch;
+  fallbackColor: string;
+  coolerFull: boolean;
+  onKeep: () => void;
+  onTrash: () => void;
+}) {
+  const value = c.isJunk ? 0 : fishValue(c.tier, c.weightKg);
+  const fullRelease = !c.isJunk && coolerFull;
+  return (
+    <div style={ui.coolerBackdrop}>
+      <style>{`@keyframes catchPop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
+      <div style={{ ...ui.catchPanel, animation: "catchPop 0.28s ease-out" }}>
+        <div style={ui.catchBanner}>{c.isJunk ? "You hauled in…" : "You caught…"}</div>
+        <div style={{ ...ui.catchArtWrap, background: c.isJunk ? "#e8e4d6" : "#dceef0" }}>
+          <CatchArt name={c.name} color={fallbackColor} size={230} />
+        </div>
+        <div style={ui.catchName}>{c.name}</div>
+
+        {c.isJunk ? (
+          <div style={ui.catchMeta}>Not worth a dime. Keep the waters clean!</div>
+        ) : (
+          <div style={ui.catchStats}>
+            <span style={{ ...ui.tierDot, background: tierColor(c.tier) }}>{c.tier}</span>
+            <span style={ui.catchStat}>{c.weightKg} kg</span>
+            <span style={ui.catchStat}>{c.water === "fresh" ? "🟦 Fresh" : "🌊 Salt"}</span>
+            <span style={{ ...ui.catchStat, color: "#2e7d4f", fontWeight: 800 }}>${value}</span>
+          </div>
+        )}
+        {c.bait && !c.isJunk && (
+          <div style={ui.catchBaitHint}>
+            🪱 Keeps as bait — lures T{Math.min(...c.bait.forTiers)}–T{Math.max(...c.bait.forTiers)}
+          </div>
+        )}
+        {fullRelease && <div style={ui.catchFullWarn}>🧊 Cooler full — it'll be released</div>}
+
+        <button
+          style={{ ...ui.catchBtn, background: c.isJunk ? "#8a8f96" : fullRelease ? "#c98a5a" : "#3f9e6a" }}
+          onClick={c.isJunk ? onTrash : onKeep}
+        >
+          {c.isJunk ? "🗑 Put in Trash" : fullRelease ? "Release" : "🧊 Add to Cooler"}
+        </button>
       </div>
     </div>
   );
@@ -293,7 +530,7 @@ function CastPanel({
         <div style={ui.baitRow}>
           <button
             style={{ ...ui.baitChip, ...(bait.equippedId === null ? ui.baitChipActive : null) }}
-            onClick={() => bait.onEquip(null)}
+            onClick={() => { sfx.equip(); bait.onEquip(null); }}
           >
             No bait
           </button>
@@ -301,7 +538,7 @@ function CastPanel({
             <button
               key={o.id}
               style={{ ...ui.baitChip, ...(bait.equippedId === o.id ? ui.baitChipActive : null) }}
-              onClick={() => bait.onEquip(o.id)}
+              onClick={() => { sfx.equip(); bait.onEquip(o.id); }}
               title={o.hint}
             >
               {o.name} ×{o.count}
@@ -318,7 +555,7 @@ function CastPanel({
             <button
               key={o.id}
               style={{ ...ui.baitChip, ...(hooks.equippedId === o.id ? ui.baitChipActive : null) }}
-              onClick={() => hooks.onEquip(o.id)}
+              onClick={() => { sfx.equip(); hooks.onEquip(o.id); }}
               title={o.hint}
             >
               {o.name} ×{o.count}
@@ -418,7 +655,8 @@ const ui: Record<string, CSSProperties> = {
   coolerClose: { border: "none", background: "rgba(60,90,87,0.1)", color: "#3c5a57", borderRadius: 10, width: 30, height: 30, fontSize: 15, fontWeight: 700, cursor: "pointer" },
   coolerEmpty: { padding: "32px 24px", textAlign: "center", opacity: 0.7, fontSize: 15 },
   coolerList: { overflowY: "auto", padding: "6px 0", flex: 1 },
-  coolerRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 18px" },
+  coolerRow: { display: "flex", alignItems: "center", gap: 10, padding: "6px 18px" },
+  coolerThumb: { flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 38, background: "#dceef0", borderRadius: 10, overflow: "hidden" },
   tierDot: { flex: "0 0 auto", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, color: "#fff", fontWeight: 800, fontSize: 12 },
   coolerName: { fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   coolerMeta: { fontSize: 12, opacity: 0.75, flex: "0 0 auto" },
@@ -426,6 +664,24 @@ const ui: Record<string, CSSProperties> = {
   coolerFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderTop: "1px solid rgba(60,90,87,0.15)", fontSize: 15 },
   coolerHint: { padding: "0 18px 14px", fontSize: 12, opacity: 0.65, textAlign: "center" },
   coolerWarn: { fontWeight: 700, color: "#c0392b", textAlign: "center", maxWidth: 260, marginTop: 2 },
+  catchPanel: { width: "min(340px, 92vw)", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "#f4f1e8", borderRadius: 22, boxShadow: "0 14px 44px rgba(0,0,0,0.35)", padding: "16px 18px 18px", color: "#3c5a57" },
+  catchBanner: { fontSize: 13, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.65 },
+  catchArtWrap: { borderRadius: 16, padding: "4px 0", width: "100%", display: "flex", justifyContent: "center", boxShadow: "inset 0 1px 4px rgba(0,0,0,0.08)" },
+  catchName: { fontSize: 21, fontWeight: 800, textAlign: "center", lineHeight: 1.15 },
+  catchStats: { display: "flex", alignItems: "center", gap: 12, fontSize: 14 },
+  catchStat: { fontWeight: 700 },
+  catchMeta: { fontSize: 13, opacity: 0.7, textAlign: "center" },
+  catchBaitHint: { fontSize: 12, fontWeight: 600, color: "#8a6a3a", background: "rgba(233,221,196,0.7)", borderRadius: 10, padding: "4px 10px" },
+  catchFullWarn: { fontSize: 12, fontWeight: 700, color: "#c0392b" },
+  catchBtn: { pointerEvents: "auto", border: "none", borderRadius: 22, padding: "12px 34px", fontSize: 16, fontWeight: 800, color: "#fff", boxShadow: "0 4px 14px rgba(0,0,0,0.22)", cursor: "pointer", marginTop: 4 },
+  tutCard: { position: "absolute", top: "max(64px, calc(env(safe-area-inset-top) + 50px))", left: "50%", transform: "translateX(-50%)", width: "min(330px, 86vw)", background: "#fff6dc", border: "1.5px solid #f4c453", borderRadius: 16, padding: "10px 14px 12px", color: "#5a4a1e", boxShadow: "0 6px 20px rgba(0,0,0,0.2)", zIndex: 6, pointerEvents: "none" },
+  tutCardDone: { top: "22%", pointerEvents: "auto", textAlign: "center" },
+  tutHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", opacity: 0.85, marginBottom: 5 },
+  tutDots: { display: "inline-flex", gap: 4 },
+  tutDot: { width: 7, height: 7, borderRadius: "50%" },
+  tutNote: { fontSize: 12.5, fontWeight: 700, color: "#a8642c", marginBottom: 4 },
+  tutText: { fontSize: 14, fontWeight: 600, lineHeight: 1.35 },
+  tutDoneBtn: { pointerEvents: "auto", marginTop: 10, border: "none", borderRadius: 18, padding: "10px 26px", fontSize: 15, fontWeight: 800, color: "#fff", background: "#3f9e6a", boxShadow: "0 4px 12px rgba(0,0,0,0.2)", cursor: "pointer" },
   topBars: { position: "absolute", top: 18, left: 96, right: 16, display: "flex", gap: 12 },
   meterLabel: { fontSize: 11, fontWeight: 600, opacity: 0.8, marginBottom: 3, textShadow: "0 1px 2px rgba(255,255,255,0.6)" },
   meterTrack: { height: 12, borderRadius: 6, background: "rgba(255,255,255,0.45)", overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)" },

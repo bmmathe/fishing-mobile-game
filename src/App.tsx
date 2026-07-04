@@ -4,11 +4,13 @@ import { FishingGame } from "./fishing/FishingGame";
 import { RegionSelect } from "./world/RegionSelect";
 import { RegionMap } from "./world/RegionMap";
 import { BoatScene } from "./world/BoatScene";
-import { getRegion, isFreeFoot, type Spot } from "./world/regions";
+import { easiestSpot, getRegion, isFreeFoot, type Spot } from "./world/regions";
 import { createPlayerStore, COOLER_CAP } from "./game/playerStore";
 import { fishFee } from "./game/gear";
 import { TackleShop } from "./game/TackleShop";
 import { Collection } from "./game/Collection";
+import { MuteButton } from "./ui/MuteButton";
+import { sfx } from "./audio/sfx";
 import type { Water } from "./fishing/fishCatalog";
 
 // Views: region-map (your region) · travel (full US) · boat (drive the water) ·
@@ -28,7 +30,11 @@ export default function App() {
 
   // Bank catches into the cooler + wire bait/hook stock to the player.
   useEffect(() => {
-    store.onCatch = (c) => player.addCatch(c);
+    store.onCatch = (c) => {
+      player.addCatch(c);
+      // Keeping the first real fish graduates the how-to-fish tutorial.
+      player.completeTutorial();
+    };
     store.hasBait = () => player.hasBait();
     store.consumeBait = () => {
       player.consumeBait();
@@ -78,6 +84,7 @@ export default function App() {
           currentRegionId={null}
           currency={player.currency}
           onSelect={(id) => {
+            sfx.uiTap();
             player.startIn(id);
             setView("region-map");
           }}
@@ -87,6 +94,8 @@ export default function App() {
   }
 
   const region = getRegion(player.currentRegionId);
+  // First-timer tutorial: gate the map to the gentlest spot in the region.
+  const tutorialSpot = player.tutorialDone ? null : easiestSpot(region);
   const openShop = () => {
     setShopReturn(view === "travel" ? "travel" : "region-map");
     setView("shop");
@@ -124,20 +133,33 @@ export default function App() {
         <RegionMap
           region={region}
           currency={player.currency}
+          tutorialSpotId={tutorialSpot?.id ?? null}
           onTravel={() => setView("travel")}
           canBoat={(water) => player.canBoat(water)}
           footFeeFor={(spot) => (isFreeFoot(spot.body) ? 0 : fishFee(spot.quality, false))}
           onFishFoot={(spot: Spot) => {
             const fee = isFreeFoot(spot.body) ? 0 : fishFee(spot.quality, false);
             if (player.payFishFee(fee)) {
+              if (fee > 0) sfx.buy();
+              else sfx.uiTap();
               store.setSpot(spot);
               setFishingReturn("region-map");
               setView("fishing");
+            } else {
+              sfx.denied();
             }
           }}
+          boatFeeFor={(spot) => fishFee(spot.quality, true)}
           onBoat={(spot: Spot) => {
-            setBoatWater(spot.water);
-            setView("boat");
+            // One boat fee, paid when you launch — buoy fishing is then free
+            // for the whole trip.
+            if (player.payFishFee(fishFee(spot.quality, true))) {
+              sfx.buy();
+              setBoatWater(spot.water);
+              setView("boat");
+            } else {
+              sfx.denied();
+            }
           }}
         />
       )}
@@ -147,13 +169,11 @@ export default function App() {
           region={region}
           water={boatWater}
           boatSpeed={player.boatSpeed}
-          currency={player.currency}
           onFish={(spot: Spot) => {
-            if (player.payFishFee(fishFee(spot.quality, true))) {
-              store.setSpot(spot);
-              setFishingReturn("boat");
-              setView("fishing");
-            }
+            // Trip fee was already paid at launch — fishing here is free.
+            store.setSpot(spot);
+            setFishingReturn("boat");
+            setView("fishing");
           }}
           onDock={() => setView("region-map")}
         />
@@ -165,7 +185,12 @@ export default function App() {
           currentRegionId={player.currentRegionId}
           currency={player.currency}
           onSelect={(id) => {
-            if (player.travelTo(id, getRegion(id).travelCost)) setView("region-map");
+            if (player.travelTo(id, getRegion(id).travelCost)) {
+              sfx.buy();
+              setView("region-map");
+            } else {
+              sfx.denied();
+            }
           }}
         />
       )}
@@ -177,6 +202,7 @@ export default function App() {
           bait={baitBar}
           hooks={hookBar}
           cooler={{ count: player.inventory.length, cap: COOLER_CAP, full: player.coolerFull, items: player.inventory }}
+          tutorial={!player.tutorialDone}
         />
       )}
 
@@ -188,16 +214,24 @@ export default function App() {
       {onMap && (
         <div style={ui.mapOverlay}>
           <div style={ui.wallet}>${player.currency.toLocaleString()}</div>
+          <MuteButton />
           <button
             style={ui.shopBtn}
             onClick={() => {
+              sfx.uiTap();
               setShopReturn(view === "travel" ? "travel" : "region-map");
               setView("collection");
             }}
           >
             🏆
           </button>
-          <button style={ui.shopBtn} onClick={openShop}>
+          <button
+            style={ui.shopBtn}
+            onClick={() => {
+              sfx.uiTap();
+              openShop();
+            }}
+          >
             🎣 Shop
           </button>
         </div>

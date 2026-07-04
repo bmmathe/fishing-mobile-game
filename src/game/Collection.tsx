@@ -1,5 +1,7 @@
 import { useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { ALL_FISH } from "../fishing/fishCatalog";
+import { CatchArt } from "../fishing/CatchArt";
+import { sfx } from "../audio/sfx";
 import { TROPHY_CAP, type PlayerStore } from "./playerStore";
 
 const QUALITY = "#c9a24f";
@@ -20,10 +22,10 @@ export function Collection({ store, onBack }: { store: PlayerStore; onBack: () =
       </div>
 
       <div style={ui.tabs}>
-        <button style={{ ...ui.tab, ...(tab === "trophies" ? ui.tabActive : null) }} onClick={() => setTab("trophies")}>
+        <button style={{ ...ui.tab, ...(tab === "trophies" ? ui.tabActive : null) }} onClick={() => { sfx.uiTap(); setTab("trophies"); }}>
           🏆 Trophy Wall ({store.trophies.length}/{TROPHY_CAP})
         </button>
-        <button style={{ ...ui.tab, ...(tab === "fishdex" ? ui.tabActive : null) }} onClick={() => setTab("fishdex")}>
+        <button style={{ ...ui.tab, ...(tab === "fishdex" ? ui.tabActive : null) }} onClick={() => { sfx.uiTap(); setTab("fishdex"); }}>
           📖 Fishdex
         </button>
       </div>
@@ -41,12 +43,15 @@ function TrophyTab({ store }: { store: PlayerStore }) {
     <div style={ui.grid}>
       {store.trophies.map((t, i) => (
         <div key={i} style={ui.trophyCard}>
-          <div style={{ fontSize: 26 }}>🏆</div>
+          {/* mounted on a little wooden plaque */}
+          <div style={ui.trophyMount}>
+            <CatchArt name={t.name} size={124} />
+          </div>
           <div style={{ fontWeight: 800 }}>{t.name}</div>
           <div style={ui.sub}>
             {t.weightKg} kg · T{t.tier} · {t.water === "fresh" ? "🟦" : "🌊"}
           </div>
-          <button style={ui.takeDown} onClick={() => store.removeTrophy(i)}>
+          <button style={ui.takeDown} onClick={() => { sfx.coin(); store.removeTrophy(i); }}>
             Take down (+${t.value})
           </button>
         </div>
@@ -75,7 +80,13 @@ function FishdexTab({ store }: { store: PlayerStore }) {
         {species.map((f) => {
           const e = store.fishdex[f.name];
           return (
-            <div key={f.name} style={{ ...ui.dexCard, opacity: e ? 1 : 0.5 }}>
+            <div key={f.name} style={{ ...ui.dexCard, opacity: e ? 1 : 0.6 }}>
+              {/* undiscovered species show as a blacked-out silhouette */}
+              <div style={ui.dexArt}>
+                <span style={{ display: "flex", filter: e ? "none" : "brightness(0) opacity(0.35)" }}>
+                  <CatchArt name={f.name} color={f.color} size={110} />
+                </span>
+              </div>
               <div style={{ fontWeight: 700 }}>{e ? f.name : "???"}</div>
               <div style={ui.sub}>
                 T{f.tier} · {f.water === "fresh" ? "🟦" : "🌊"}
@@ -117,6 +128,8 @@ const ui: Record<string, CSSProperties> = {
   empty: { textAlign: "center", opacity: 0.7, marginTop: 40, fontSize: 15 },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 },
   trophyCard: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.8)", border: `2px solid ${QUALITY}`, borderRadius: 14, padding: "12px 8px", textAlign: "center" },
+  trophyMount: { display: "flex", justifyContent: "center", alignItems: "center", width: "100%", background: "linear-gradient(180deg, #caa46e 0%, #b98a55 100%)", borderRadius: 10, boxShadow: "inset 0 1px 4px rgba(0,0,0,0.25)", padding: "2px 0" },
+  dexArt: { display: "flex", justifyContent: "center", marginBottom: 4, background: "#dceef0", borderRadius: 8, overflow: "hidden" },
   takeDown: { marginTop: 4, border: "none", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, color: "#3c5a57", background: "rgba(0,0,0,0.06)", cursor: "pointer" },
   dexCount: { fontWeight: 700, marginBottom: 10 },
   dexCard: { background: "rgba(255,255,255,0.7)", borderRadius: 12, padding: "10px 12px" },

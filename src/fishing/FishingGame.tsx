@@ -14,12 +14,15 @@ export function FishingGame({
   bait,
   hooks,
   cooler,
+  tutorial,
 }: {
   store: FishingStore;
   onExit: () => void;
   bait?: BaitBarProps;
   hooks?: HookBarProps;
   cooler?: CoolerInfo;
+  /** First-time-user tutorial: step-by-step coach over the HUD. */
+  tutorial?: boolean;
 }) {
   return (
     <>
@@ -32,7 +35,7 @@ export function FishingGame({
       >
         <FishingScene store={store} />
       </Canvas>
-      <FishingHud store={store} onExit={onExit} bait={bait} hooks={hooks} cooler={cooler} />
+      <FishingHud store={store} onExit={onExit} bait={bait} hooks={hooks} cooler={cooler} tutorial={tutorial} />
     </>
   );
 }

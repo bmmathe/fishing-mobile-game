@@ -301,6 +301,26 @@ export function getSpot(id: string): Spot | undefined {
   return undefined;
 }
 
+/**
+ * The gentlest land spot in a region — where the tutorial sends first-timers.
+ * Ranked by the weighted average tier of the spot's pool (free spots win ties,
+ * then the earlier spot in the list for determinism).
+ */
+export function easiestSpot(region: Region): Spot {
+  const land = region.spots.filter((s) => s.access === "land");
+  const avgTier = (s: Spot) => {
+    const total = s.tiers.reduce((sum, t) => sum + t.weight, 0);
+    return s.tiers.reduce((sum, t) => sum + t.tier * t.weight, 0) / total;
+  };
+  return land.reduce((best, s) => {
+    const d = avgTier(s) - avgTier(best);
+    if (d < -1e-9) return s;
+    if (d > 1e-9) return best;
+    // tie: prefer the free spot
+    return !isFreeFoot(best.body) && isFreeFoot(s.body) ? s : best;
+  }, land[0]);
+}
+
 /** Weighted random tier from a spot's pool. */
 export function pickTier(tiers: TierWeight[], rng: () => number = Math.random): number {
   const total = tiers.reduce((sum, t) => sum + t.weight, 0);

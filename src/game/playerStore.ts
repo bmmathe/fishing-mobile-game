@@ -58,6 +58,7 @@ interface Persisted {
   poleTier: number;
   boatTier: number;
   currentRegionId: string | null;
+  tutorialDone: boolean;
 }
 
 const STORAGE_KEY = "tidalties.player";
@@ -93,6 +94,8 @@ export class PlayerStore {
   boatTier = -1;
   /** The region the player is currently located in (null = pick a start). */
   currentRegionId: string | null = null;
+  /** First-time-user tutorial: false until the first fish is banked. */
+  tutorialDone = false;
 
   private version = 0;
   private listeners = new Set<() => void>();
@@ -390,6 +393,13 @@ export class PlayerStore {
     return this.currency >= cost;
   }
 
+  /** Mark the how-to-fish tutorial as finished (first fish banked). */
+  completeTutorial() {
+    if (this.tutorialDone) return;
+    this.tutorialDone = true;
+    this.changed();
+  }
+
   /** Free first spawn — only valid before a region is chosen. */
   startIn(regionId: string) {
     if (this.currentRegionId !== null) return;
@@ -426,6 +436,7 @@ export class PlayerStore {
         poleTier: this.poleTier,
         boatTier: this.boatTier,
         currentRegionId: this.currentRegionId,
+        tutorialDone: this.tutorialDone,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
@@ -455,6 +466,9 @@ export class PlayerStore {
       this.poleTier = clampTier(d.poleTier, POLE_TIERS.length);
       this.boatTier = typeof d.boatTier === "number" ? Math.max(-1, Math.min(BOAT_TIERS.length - 1, Math.floor(d.boatTier))) : -1;
       this.currentRegionId = d.currentRegionId ?? null;
+      // Older saves predate the flag: anyone with Fishdex entries has clearly
+      // fished before, so don't force the tutorial on them.
+      this.tutorialDone = d.tutorialDone ?? Object.keys(this.fishdex).length > 0;
     } catch {
       // ignore corrupt save
     }
