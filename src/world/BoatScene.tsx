@@ -7,6 +7,7 @@ import { sfx } from "../audio/sfx";
 import { Stick } from "../ui/Stick";
 import type { Region, Spot } from "./regions";
 import type { Water } from "../fishing/fishCatalog";
+import { fmtRestLeft } from "../game/spotRest";
 
 const ARENA = 22; // half-extent of the drivable water
 const NEAR = 3.6; // distance at which a spot becomes fishable
@@ -20,12 +21,15 @@ export function BoatScene({
   region,
   water,
   boatSpeed,
+  restUntilFor,
   onFish,
   onDock,
 }: {
   region: Region;
   water: Water;
   boatSpeed: number;
+  /** Spot rest: epoch ms when the spot reopens (0 = fishable now). */
+  restUntilFor: (spot: Spot) => number;
   onFish: (spot: Spot) => void;
   onDock: () => void;
 }) {
@@ -77,13 +81,20 @@ export function BoatScene({
         <Stick hint="drive" onMove={(x, y) => (input.current = { x, y })} onRelease={() => (input.current = { x: 0, y: 0 })} />
       </div>
 
-      {near && (
-        <div style={ui.fishWrap}>
-          <button style={ui.fishBtn} onClick={() => { sfx.uiTap(); onFish(near); }}>
-            🎣 Fish here · {near.name}
-          </button>
-        </div>
-      )}
+      {near &&
+        (restUntilFor(near) > 0 ? (
+          <div style={ui.fishWrap}>
+            <div style={ui.restedBtn}>
+              🌙 Fished out · back in {fmtRestLeft(restUntilFor(near) - Date.now())}
+            </div>
+          </div>
+        ) : (
+          <div style={ui.fishWrap}>
+            <button style={ui.fishBtn} onClick={() => { sfx.uiTap(); onFish(near); }}>
+              🎣 Fish here · {near.name}
+            </button>
+          </div>
+        ))}
     </>
   );
 }
@@ -309,4 +320,5 @@ const ui: Record<string, CSSProperties> = {
   stickWrap: { position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: "max(22px, env(safe-area-inset-bottom))" },
   fishWrap: { position: "fixed", left: 0, right: 0, top: "20%", display: "flex", justifyContent: "center", pointerEvents: "none" },
   fishBtn: { pointerEvents: "auto", border: "none", borderRadius: 24, padding: "13px 24px", fontSize: 15, fontWeight: 700, color: "#fff", background: "#3f9e6a", boxShadow: "0 4px 14px rgba(0,0,0,0.25)", cursor: "pointer" },
+  restedBtn: { borderRadius: 24, padding: "13px 24px", fontSize: 15, fontWeight: 700, color: "#eef2f4", background: "#6b7b86", boxShadow: "0 4px 14px rgba(0,0,0,0.25)" },
 };

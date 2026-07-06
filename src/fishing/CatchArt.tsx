@@ -32,7 +32,7 @@ type Family =
   | "grouper"
   | "mahi";
 
-type Pattern = "vbars" | "spots" | "stripe" | "hlines" | "wavy" | "scales" | "scutes" | "blotches";
+type Pattern = "vbars" | "spots" | "stripe" | "hlines" | "wavy" | "scales" | "scutes" | "blotches" | "runes";
 
 interface ArtSpec {
   family: Family;
@@ -49,6 +49,11 @@ interface ArtSpec {
   bigEye?: boolean; // oversized glassy eye (walleye)
   sail?: boolean; // billfish: huge sail dorsal
   longBill?: boolean; // billfish: swordfish-length bill
+  /** mythic (T9) adornments */
+  crown?: boolean; // small golden crown above the head
+  halo?: boolean; // floating golden ring
+  crystals?: boolean; // ice spikes along the back
+  wisps?: boolean; // trailing magic wisps off the tail
 }
 
 /* ------------------------------------------------------------------ */
@@ -328,6 +333,26 @@ function PatternLayer({ pattern, color, box }: { pattern: Pattern; color: string
           ))}
         </g>
       );
+    case "runes":
+      // Glowing glyphs down the flank — mythic rune-script.
+      return (
+        <g stroke={color} strokeWidth={2} opacity={0.85} fill="none" strokeLinecap="round">
+          {[0.24, 0.4, 0.56, 0.72].map((f, i) => {
+            const x = x0 + f * w;
+            const y = midY + (i % 2 ? 7 : -7);
+            return i % 2 ? (
+              // angular glyph
+              <path key={i} d={`M ${x - 5} ${y + 5} L ${x} ${y - 6} L ${x + 5} ${y + 5} M ${x - 3} ${y + 1} L ${x + 3} ${y + 1}`} />
+            ) : (
+              // ringed glyph
+              <g key={i}>
+                <circle cx={x} cy={y} r={6} />
+                <path d={`M ${x} ${y - 6} L ${x} ${y + 6}`} />
+              </g>
+            );
+          })}
+        </g>
+      );
   }
 }
 
@@ -347,6 +372,8 @@ function FishFigure({ spec }: { spec: ArtSpec }) {
           <path d={g.body} />
         </clipPath>
       </defs>
+      {/* mythic wisps trail behind everything */}
+      {spec.wisps && <Wisps box={g.box} />}
       {/* tail + fins behind the body */}
       <path d={g.tail} fill={spec.fin} />
       {g.dorsal && <path d={g.dorsal} fill={spec.fin} />}
@@ -382,11 +409,92 @@ function FishFigure({ spec }: { spec: ArtSpec }) {
       {spec.tailSpot && <circle cx={g.box[0] + 8} cy={(g.box[1] + g.box[3]) / 2 - 6} r={5} fill="#2f3a36" />}
       {/* extras (whiskers, beaks, finlets…) */}
       {g.extras?.(spec.fin, spec.body)}
+      {/* mythic adornments */}
+      {spec.crystals && <IceCrystals box={g.box} />}
+      {spec.crown && <Crown x={ex} y={g.box[1]} />}
+      {spec.halo && <Halo x={ex} y={g.box[1]} />}
       {/* eye */}
       <circle cx={ex} cy={ey} r={eyeR + 1.6} fill="#f4f1ea" />
       <circle cx={ex} cy={ey} r={eyeR} fill={spec.glowEye ? "#ffd75e" : "#28313a"} />
       {spec.glowEye && <circle cx={ex} cy={ey} r={eyeR + 4} fill="none" stroke="#ffd75e" strokeWidth={1.5} opacity={0.6} />}
       <circle cx={ex + eyeR * 0.35} cy={ey - eyeR * 0.35} r={eyeR * 0.3} fill="#ffffff" />
+    </g>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Mythic adornments (T9)                                               */
+/* ------------------------------------------------------------------ */
+
+function Crown({ x, y }: { x: number; y: number }) {
+  return (
+    <g transform={`translate(${x - 16}, ${y - 24})`}>
+      <path d="M 0 15 L 3 3 L 9 10 L 14 0 L 19 10 L 25 3 L 28 15 Z" fill="#f4c453" stroke="#c9992e" strokeWidth={1.2} />
+      <rect x={0} y={14} width={28} height={4.5} rx={2.2} fill="#f4c453" stroke="#c9992e" strokeWidth={1} />
+      <circle cx={14} cy={8.5} r={2} fill="#e86a6a" />
+      <circle cx={5.5} cy={12} r={1.4} fill="#7fc6d6" />
+      <circle cx={22.5} cy={12} r={1.4} fill="#7fc6d6" />
+    </g>
+  );
+}
+
+function Halo({ x, y }: { x: number; y: number }) {
+  return (
+    <g>
+      <ellipse cx={x - 4} cy={y - 14} rx={17} ry={5.5} fill="none" stroke="#ffd75e" strokeWidth={3.4} opacity={0.9} />
+      <ellipse cx={x - 4} cy={y - 15.5} rx={17} ry={5.5} fill="none" stroke="#fff2b8" strokeWidth={1.4} opacity={0.9} />
+    </g>
+  );
+}
+
+function IceCrystals({ box }: { box: [number, number, number, number] }) {
+  const [x0, y0, x1] = box;
+  const w = x1 - x0;
+  return (
+    <g fill="#dff4fb" stroke="#9fd3e6" strokeWidth={1.2} strokeLinejoin="round">
+      {[
+        [0.34, 19], [0.46, 26], [0.58, 21], [0.7, 15],
+      ].map(([f, hgt], i) => {
+        const x = x0 + f * w;
+        return <path key={i} d={`M ${x - 5} ${y0 + 6} L ${x} ${y0 + 6 - hgt} L ${x + 5} ${y0 + 6} Z`} />;
+      })}
+    </g>
+  );
+}
+
+function Wisps({ box }: { box: [number, number, number, number] }) {
+  const [x0, y0, , y1] = box;
+  const midY = (y0 + y1) / 2;
+  return (
+    <g fill="none" strokeLinecap="round" opacity={0.7}>
+      <path d={`M ${x0 - 6} ${midY - 10} q -12 -8 -24 -2 q 10 2 14 8`} stroke="#ffe89a" strokeWidth={3.4} />
+      <path d={`M ${x0 - 8} ${midY + 8} q -16 6 -26 2 q 8 6 18 6`} stroke="#ffd75e" strokeWidth={3} />
+      <path d={`M ${x0 - 2} ${midY} q -20 0 -30 -8`} stroke="#fff2b8" strokeWidth={2.4} />
+      <circle cx={x0 - 30} cy={midY - 12} r={2.2} fill="#ffe89a" stroke="none" />
+      <circle cx={x0 - 34} cy={midY + 12} r={1.8} fill="#ffd75e" stroke="none" />
+    </g>
+  );
+}
+
+/** Twinkling 4-point stars over the portrait (animated card only). */
+function Sparkles() {
+  const pts: [number, number, number, string][] = [
+    [38, 34, 1, "0s"],
+    [204, 26, 0.8, "0.7s"],
+    [218, 104, 0.9, "1.3s"],
+    [26, 102, 0.7, "1.9s"],
+    [120, 16, 0.75, "0.4s"],
+    [186, 124, 0.65, "1s"],
+  ];
+  return (
+    <g fill="#ffe89a">
+      {pts.map(([x, y, s, begin], i) => (
+        <g key={i} transform={`translate(${x}, ${y}) scale(${s})`}>
+          <path d="M 0 -7 L 1.8 -1.8 L 7 0 L 1.8 1.8 L 0 7 L -1.8 1.8 L -7 0 L -1.8 -1.8 Z" opacity={0}>
+            <animate attributeName="opacity" values="0;1;0" dur="2.2s" begin={begin} repeatCount="indefinite" />
+          </path>
+        </g>
+      ))}
     </g>
   );
 }
@@ -612,6 +720,24 @@ const FISH_ART: Record<string, ArtSpec> = {
   Swordfish: { family: "billfish", body: "#6a7a8a", belly: "#dee5ea", fin: "#4e5c6a", longBill: true },
   "Giant Bluefin": { family: "tuna", body: "#5a6e8a", belly: "#dde4ec", fin: "#42526a", pattern: "stripe", patternColor: "#96a6bc" },
   "Old Hooktooth": { family: "billfish", body: "#4a5a5e", belly: "#c6d2d4", fin: "#354448", pattern: "blotches", patternColor: "#2c383c", glowEye: true },
+
+  // --- Tier 9 — Mythic (fantastical; one per endgame spot + the starter legend) ---
+  // Fresh (deep-lake):
+  Raincaller: { family: "sturgeon", body: "#4e6478", belly: "#b8ccd8", fin: "#35485a", pattern: "runes", patternColor: "#7fd6e8", glowEye: true, wisps: true },
+  "Gold Rush Ghost": { family: "trout", body: "#d9b84f", belly: "#f7ecc4", fin: "#b3924a", pattern: "spots", patternColor: "#fff2b8", glowEye: true, wisps: true },
+  "The Bayou King": { family: "gar", body: "#5e7a4e", belly: "#cfdcc0", fin: "#46603a", pattern: "scales", patternColor: "#86a06a", glowEye: true, crown: true },
+  "The Glades Wyrm": { family: "eel", body: "#3f8a6e", belly: "#bfe4d4", fin: "#2c6650", pattern: "runes", patternColor: "#9fe8c8", glowEye: true, wisps: true },
+  Frostjaw: { family: "pike", body: "#8fc2d6", belly: "#e8f6fa", fin: "#5f92a8", pattern: "hlines", patternColor: "#c8ecf6", glowEye: true, crystals: true },
+  Stormwhisker: { family: "catfish", body: "#5e5a72", belly: "#c6c2d4", fin: "#f2e27a", pattern: "blotches", patternColor: "#47435c", glowEye: true },
+  Lanternmaw: { family: "grouper", body: "#2c3440", belly: "#47525e", fin: "#222933", pattern: "spots", patternColor: "#7fe8d6", glowEye: true },
+  // Salt (offshore):
+  "The Moonveil": { family: "billfish", body: "#c2c9d6", belly: "#f2f4f8", fin: "#97a2b6", sail: true, pattern: "hlines", patternColor: "#e6ecf4", glowEye: true, halo: true },
+  "El Dorado": { family: "mahi", body: "#e8c94f", belly: "#f9eeb8", fin: "#d4a32e", pattern: "scales", patternColor: "#f6e28a", glowEye: true, halo: true },
+  Doubloonscale: { family: "tuna", body: "#c9a83f", belly: "#eee0ac", fin: "#8a6f28", pattern: "scales", patternColor: "#f2d878", glowEye: true },
+  "Stormcrown Sailfish": { family: "billfish", body: "#6e5a8a", belly: "#d8d0e6", fin: "#4c3f66", sail: true, pattern: "vbars", patternColor: "#a795c6", glowEye: true, crown: true },
+  "The Fogbank King": { family: "grouper", body: "#8a929a", belly: "#dde2e6", fin: "#67707a", pattern: "blotches", patternColor: "#737c86", glowEye: true, crown: true, wisps: true },
+  // The starter legend:
+  Glimmerwish: { family: "minnow", body: "#e8c95a", belly: "#fdf3cf", fin: "#d4a83a", pattern: "stripe", patternColor: "#fff2b8", glowEye: true, halo: true },
 };
 
 /** Fallback for a species with no art entry yet: a plain bass in its color. */
@@ -621,14 +747,50 @@ function fallbackSpec(color: string): ArtSpec {
 
 /**
  * The catch portrait. Junk gets its item drawing; fish get their species art.
- * `color` is the catalog color used only as a fallback tint.
+ * `color` is the catalog color used only as a fallback tint. `animated` adds
+ * the mythic treatment: golden aura pulse, gentle bob, and twinkling sparkles
+ * (SMIL, so it's self-contained — no CSS plumbing).
  */
-export function CatchArt({ name, color = "#7a9e5e", size = 220 }: { name: string; color?: string; size?: number }) {
+export function CatchArt({
+  name,
+  color = "#7a9e5e",
+  size = 220,
+  animated = false,
+}: {
+  name: string;
+  color?: string;
+  size?: number;
+  animated?: boolean;
+}) {
   const junk = JUNK_ART[name];
   const spec = FISH_ART[name];
+  const art = junk ?? <FishFigure spec={spec ?? fallbackSpec(color)} />;
   return (
     <svg width={size} height={(size * 140) / 240} viewBox="0 0 240 140" role="img" aria-label={name}>
-      {junk ?? <FishFigure spec={spec ?? fallbackSpec(color)} />}
+      {animated ? (
+        <>
+          {/* pulsing golden aura behind the fish */}
+          <ellipse cx={120} cy={72} rx={94} ry={48} fill="#ffd75e" opacity={0.25}>
+            <animate attributeName="opacity" values="0.15;0.4;0.15" dur="2.6s" repeatCount="indefinite" />
+          </ellipse>
+          {/* gentle swim bob */}
+          <g>
+            <animateTransform
+              attributeName="transform"
+              type="translate"
+              values="0 0; 0 -4; 0 0"
+              dur="3s"
+              repeatCount="indefinite"
+              calcMode="spline"
+              keySplines="0.45 0 0.55 1; 0.45 0 0.55 1"
+            />
+            {art}
+          </g>
+          <Sparkles />
+        </>
+      ) : (
+        art
+      )}
     </svg>
   );
 }

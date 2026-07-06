@@ -37,6 +37,7 @@ export function RegionMap({
   canBoat,
   footFeeFor,
   boatFeeFor,
+  restUntilFor,
   tutorialSpotId,
 }: {
   region: Region;
@@ -47,6 +48,8 @@ export function RegionMap({
   canBoat: (water: "fresh" | "salt") => boolean;
   footFeeFor: (spot: Spot) => number;
   boatFeeFor: (spot: Spot) => number;
+  /** Spot lock: epoch ms when the spot reopens (0 = fishable now). */
+  restUntilFor: (spot: Spot) => number;
   /** First-time tutorial: only this spot is tappable (others dim out). */
   tutorialSpotId?: string | null;
 }) {
@@ -91,6 +94,7 @@ export function RegionMap({
           <SpotPin
             key={s.id}
             spot={s}
+            resting={restUntilFor(s) > 0}
             tutorialDim={!!tutorialSpotId && s.id !== tutorialSpotId}
             tutorialTarget={s.id === tutorialSpotId}
             onSelect={(sp) => {
@@ -132,6 +136,7 @@ export function RegionMap({
           currency={currency}
           offersBoat={BOAT_BODIES.includes(selected.body)}
           canBoat={canBoat(selected.water)}
+          restUntil={restUntilFor(selected)}
           onFishFoot={onFishFoot}
           onBoat={onBoat}
           onClose={() => setSelected(null)}
@@ -294,11 +299,14 @@ function SaltShoreDressing({ spot }: { spot: Spot }) {
 function SpotPin({
   spot,
   onSelect,
+  resting = false,
   tutorialDim = false,
   tutorialTarget = false,
 }: {
   spot: Spot;
   onSelect: (s: Spot) => void;
+  /** Spot rest: fished out — grayed but still tappable (card shows countdown). */
+  resting?: boolean;
   /** Tutorial: this pin is inactive & grayed out. */
   tutorialDim?: boolean;
   /** Tutorial: this pin is the highlighted "start here" spot. */
@@ -311,7 +319,7 @@ function SpotPin({
   const [x, z] = spot.pos;
   const locked = spot.access === "boat" || tutorialDim;
   const base = spot.water === "fresh" ? "#4f8f74" : "#3f8fa0";
-  const color = locked ? "#8a8f96" : base;
+  const color = locked || resting ? "#8a8f96" : base;
   const seed = x * 1.7 + z;
 
   useFrame(({ clock }) => {
@@ -391,9 +399,9 @@ function SpotPin({
       <mesh ref={ringRef} position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
         <ringGeometry args={tutorialTarget ? [0.55, 0.72, 24] : [0.45, 0.55, 22]} />
         <meshBasicMaterial
-          color={tutorialTarget ? "#f4c453" : locked ? "#9aa0a5" : color}
+          color={tutorialTarget ? "#f4c453" : locked || resting ? "#9aa0a5" : color}
           transparent
-          opacity={tutorialTarget ? 0.75 : 0.45}
+          opacity={tutorialTarget ? 0.75 : resting ? 0.25 : 0.45}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -410,7 +418,7 @@ function SpotPin({
         <div
           style={{
             ...ui.pinLabel,
-            ...(tutorialDim ? ui.pinLabelDim : null),
+            ...(tutorialDim || resting ? ui.pinLabelDim : null),
             ...(tutorialTarget ? ui.pinLabelStar : null),
             ...(locked ? null : { pointerEvents: "auto", cursor: "pointer" }),
           }}
@@ -418,7 +426,7 @@ function SpotPin({
           onPointerEnter={enter}
           onPointerLeave={leave}
         >
-          {spot.access === "boat" ? "🔒 " : tutorialTarget ? "⭐ " : ""}
+          {spot.access === "boat" ? "🔒 " : tutorialTarget ? "⭐ " : resting ? "🌙 " : ""}
           {spot.name}
         </div>
       </Html>

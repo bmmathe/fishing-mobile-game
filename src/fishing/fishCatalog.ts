@@ -70,7 +70,15 @@ export const TIERS: TierDef[] = [
   { tier: 6, label: "Tier 6 · Deepwater", blurb: "Boat only. Upgraded gear required to survive a run.", access: "boat", targetCatchRate: 0, baseLine: 1.2 },
   { tier: 7, label: "Tier 7 · Big Game", blurb: "Boat only. Bluewater brutes.", access: "boat", targetCatchRate: 0, baseLine: 1.4 },
   { tier: 8, label: "Tier 8 · Legendary", blurb: "Boat only. Mythical. The catch of a lifetime.", access: "boat", targetCatchRate: 0, baseLine: 1.6 },
+  { tier: 9, label: "Tier 9 · Mythic", blurb: "The storied ones. Once in a lifetime — if the stories are true.", access: "boat", targetCatchRate: 0, baseLine: 2.0 },
 ];
+
+/** The mythic tier — one storied fish per endgame spot, golden card, the works. */
+export const MYTHIC_TIER = 9;
+
+export function isMythic(fish: { tier: number }): boolean {
+  return fish.tier === MYTHIC_TIER;
+}
 
 /**
  * Per-tier base fight params; individual species tweak via overrides.
@@ -87,6 +95,9 @@ const BAND: Record<number, Omit<FishSpec, "name">> = {
   6: { strength: 1.05, runStrength: 2.0, runChance: 0.8, agility: 4.5, startDistance: 32, hookHold: 0.98 },
   7: { strength: 1.25, runStrength: 2.2, runChance: 0.84, agility: 5.0, startDistance: 38, hookHold: 0.99 },
   8: { strength: 1.5, runStrength: 2.4, runChance: 0.88, agility: 5.5, startDistance: 45, hookHold: 0.99 },
+  // T9 defaults are the ENDGAME mythics: balanced against the best line/pole
+  // (see scripts/mythicsim.ts). The starter mythic overrides these way down.
+  9: { strength: 2.0, runStrength: 2.7, runChance: 0.94, agility: 6.2, startDistance: 62, hookHold: 1 },
 };
 
 /** Build a fish from its tier band + per-species overrides. */
@@ -218,12 +229,48 @@ export const FISH: FishDef[] = [
   mk(8, "salt", "Swordfish", "#6a7a8a", [80, 300], { locations: BLUE }),
   mk(8, "salt", "Giant Bluefin", "#5a6e8a", [150, 400], { locations: BLUE }),
   mk(8, "salt", "Old Hooktooth", "#4a5a5e", [200, 500], { locations: BLUE }),
+
+  // ---------- Tier 9 — Mythic ----------
+  // One unique fish per endgame spot (see `mythic` on the spot defs in
+  // regions.ts) — never in a tier pool, only hooked via the mythic roll.
+  // Fresh (deep-lake spots):
+  mk(9, "fresh", "Raincaller", "#4e6478", [180, 420], { locations: ["mythic"] }),
+  mk(9, "fresh", "Gold Rush Ghost", "#d9b84f", [30, 80], { locations: ["mythic"] }),
+  mk(9, "fresh", "The Bayou King", "#5e7a4e", [90, 220], { locations: ["mythic"] }),
+  mk(9, "fresh", "The Glades Wyrm", "#3f8a6e", [60, 160], { locations: ["mythic"] }),
+  mk(9, "fresh", "Frostjaw", "#8fc2d6", [40, 110], { locations: ["mythic"] }),
+  mk(9, "fresh", "Stormwhisker", "#5e5a72", [80, 260], { locations: ["mythic"] }),
+  mk(9, "fresh", "Lanternmaw", "#2c3440", [100, 300], { locations: ["mythic"] }),
+  // Salt (offshore spots):
+  mk(9, "salt", "The Moonveil", "#c2c9d6", [200, 500], { locations: ["mythic"] }),
+  mk(9, "salt", "El Dorado", "#e8c94f", [30, 70], { locations: ["mythic"] }),
+  mk(9, "salt", "Doubloonscale", "#c9a83f", [180, 450], { locations: ["mythic"] }),
+  mk(9, "salt", "Stormcrown Sailfish", "#6e5a8a", [60, 140], { locations: ["mythic"] }),
+  mk(9, "salt", "The Fogbank King", "#8a929a", [120, 350], { locations: ["mythic"] }),
+  // The starter mythic: one shared legend haunting every starting region's
+  // easy water. Fights like a scrappy T4-5 — landable on minor gear upgrades —
+  // but bites once in a blue moon (see MYTHIC_CHANCE_STARTER in regions.ts).
+  mk(9, "fresh", "Glimmerwish", "#e8c95a", [0.3, 0.9], {
+    access: "land",
+    locations: ["mythic"],
+    strength: 0.85,
+    runStrength: 1.8,
+    runChance: 0.72,
+    agility: 4.2,
+    startDistance: 24,
+    hookHold: 0.9,
+  }),
 ];
 
 export const ALL_FISH = FISH;
 
 export function getTier(tier: number): TierDef {
   return TIERS.find((t) => t.tier === tier) ?? TIERS[0];
+}
+
+/** Look up a species by exact name (used by the per-spot mythic roll). */
+export function getFishByName(name: string): FishDef | undefined {
+  return FISH.find((f) => f.name === name);
 }
 
 /** Fish available for a given difficulty band + water (optionally gated by access). */

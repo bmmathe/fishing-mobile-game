@@ -1,6 +1,8 @@
 import { BOAT_TIERS, fishValue, LINE_TIERS, POLE_TIERS } from "./gear";
 import { baitFromFish, WORMS, type BaitDef } from "./bait";
 import { getHook, HOOKS, STARTER_HOOK_COUNT, STARTER_HOOK_ID, type HookDef } from "./hooks";
+import { coolerCooldownMs, spotLockMs } from "./spotRest";
+import type { Spot } from "../world/regions";
 
 export interface FishBait {
   grade: number;
@@ -59,6 +61,10 @@ interface Persisted {
   boatTier: number;
   currentRegionId: string | null;
   tutorialDone: boolean;
+  /** Spot-lock reopen times by spot id (epoch ms). */
+  spotLocks: Record<string, number>;
+  /** When the cooler finishes re-icing (epoch ms; 0 = keeps allowed). */
+  coolerLockedUntil: number;
 }
 
 const STORAGE_KEY = "tidalties.player";
@@ -96,6 +102,10 @@ export class PlayerStore {
   currentRegionId: string | null = null;
   /** First-time-user tutorial: false until the first fish is banked. */
   tutorialDone = false;
+  /** Spot-lock reopen times by spot id (see spotRest.ts for the durations). */
+  spotLocks: Record<string, number> = {};
+  /** Cooler re-icing: keeps blocked until this time (0 = open). */
+  coolerLockedUntil = 0;
 
   private version = 0;
   private listeners = new Set<() => void>();
@@ -161,11 +171,15 @@ export class PlayerStore {
     return this.inventory.length >= COOLER_CAP;
   }
 
-  /** Keep a catch in the cooler. Returns false (released) if the cooler is full. */
+  /**
+   * Keep a catch in the cooler. Returns false (released) if the cooler is full
+   * or re-icing. Filling the last slot starts the re-icing cooldown — the
+   * account-level catch budget (24 keeps per cooldown, wherever you fish).
+   */
   addCatch(c: { name: string; tier: number; water: "fresh" | "salt"; weightKg: number; bait?: FishBait }): boolean {
     // Fishdex records the species even if the cooler is full (you still saw it).
     this.recordDex(c);
-    if (this.coolerFull) {
+    if (!this.canKeep) {
       this.changed();
       return false;
     }
@@ -177,6 +191,10 @@ export class PlayerStore {
       value: fishValue(c.tier, c.weightKg),
       bait: c.bait,
     });
+    // The tutorial's first fish shouldn't start a cooldown mid-funnel.
+    if (this.inventory.length >= COOLER_CAP && this.tutorialDone) {
+      this.coolerLockedUntil = Date.now() + coolerCooldownMs();
+    }
     this.changed();
     return true;
   }
@@ -388,6 +406,72 @@ export class PlayerStore {
     return true;
   }
 
+  // --- spot locks + cooler cooldown (progression time-gates; see spotRest.ts) ---
+  /**
+   * Lock a spot for the flat rest period — fired on the first landed (non-junk)
+   * fish of a session. Re-entry is blocked until it expires; the session itself
+   * continues. No-ops during the tutorial. Wall-clock timestamps so locks
+   * survive reloads (device-clock tampering accepted: single-player, no server
+   * authority).
+   */
+  lockSpot(spot: Spot) {
+    if (!this.tutorialDone) return;
+    if (this.spotLocks[spot.id] && Date.now() < this.spotLocks[spot.id]) return; // already locked
+    this.spotLocks[spot.id] = Date.now() + spotLockMs();
+    this.changed();
+  }
+
+  /** Epoch ms when the spot reopens, or 0 if fishable now (lazily expires). */
+  restUntil(spot: Spot): number {
+    const until = this.spotLocks[spot.id];
+    if (!until) return 0;
+    if (Date.now() >= until) {
+      delete this.spotLocks[spot.id];
+      return 0;
+    }
+    return until;
+  }
+
+  isResting(spot: Spot): boolean {
+    return this.restUntil(spot) > 0;
+  }
+
+  /**
+   * Instantly clear a spot's lock. Monetization hook — a future premium
+   * "chum" purchase calls this after charging premium currency.
+   */
+  replenishSpot(spotId: string) {
+    if (!this.spotLocks[spotId]) return;
+    delete this.spotLocks[spotId];
+    this.changed();
+  }
+
+  /** Ms of cooler re-icing left (0 = keeps allowed; lazily clears). */
+  coolerLockMs(): number {
+    if (this.coolerLockedUntil === 0) return 0;
+    const left = this.coolerLockedUntil - Date.now();
+    if (left <= 0) {
+      this.coolerLockedUntil = 0;
+      return 0;
+    }
+    return left;
+  }
+
+  /** Can a catch be kept right now? (slots free + cooler not re-icing) */
+  get canKeep(): boolean {
+    return !this.coolerFull && this.coolerLockMs() === 0;
+  }
+
+  /**
+   * Instantly finish the cooler's re-icing. Monetization hook — the premium
+   * "fresh ice" purchase calls this after charging premium currency.
+   */
+  reiceCooler() {
+    if (this.coolerLockedUntil === 0) return;
+    this.coolerLockedUntil = 0;
+    this.changed();
+  }
+
   // --- travel ---
   canAfford(cost: number): boolean {
     return this.currency >= cost;
@@ -437,6 +521,8 @@ export class PlayerStore {
         boatTier: this.boatTier,
         currentRegionId: this.currentRegionId,
         tutorialDone: this.tutorialDone,
+        spotLocks: this.spotLocks,
+        coolerLockedUntil: this.coolerLockedUntil,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
@@ -469,6 +555,19 @@ export class PlayerStore {
       // Older saves predate the flag: anyone with Fishdex entries has clearly
       // fished before, so don't force the tutorial on them.
       this.tutorialDone = d.tutorialDone ?? Object.keys(this.fishdex).length > 0;
+      // Drop locks that expired while the game was closed (keeps the map small).
+      // Migration: v1 saves stored spotRest {count, until} — keep the until.
+      const legacy = (d as { spotRest?: Record<string, { until?: number }> }).spotRest;
+      const rawLocks: Record<string, number> =
+        d.spotLocks ??
+        Object.fromEntries(Object.entries(legacy ?? {}).map(([id, e]) => [id, e.until ?? 0]));
+      this.spotLocks = {};
+      const now = Date.now();
+      for (const [id, until] of Object.entries(rawLocks)) {
+        if (until > now) this.spotLocks[id] = until;
+      }
+      this.coolerLockedUntil =
+        typeof d.coolerLockedUntil === "number" && d.coolerLockedUntil > now ? d.coolerLockedUntil : 0;
     } catch {
       // ignore corrupt save
     }

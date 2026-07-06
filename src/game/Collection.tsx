@@ -13,6 +13,7 @@ export function Collection({ store, onBack }: { store: PlayerStore; onBack: () =
 
   return (
     <div style={ui.root}>
+      <style>{`@keyframes mythicShimmer { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }`}</style>
       <div style={ui.header}>
         <button style={ui.backBtn} onClick={onBack}>
           ← Map
@@ -42,10 +43,10 @@ function TrophyTab({ store }: { store: PlayerStore }) {
   return (
     <div style={ui.grid}>
       {store.trophies.map((t, i) => (
-        <div key={i} style={ui.trophyCard}>
-          {/* mounted on a little wooden plaque */}
-          <div style={ui.trophyMount}>
-            <CatchArt name={t.name} size={124} />
+        <div key={i} style={{ ...ui.trophyCard, ...(t.tier === 9 ? ui.mythicCard : null) }}>
+          {/* mounted on a little wooden plaque (golden for mythics) */}
+          <div style={{ ...ui.trophyMount, ...(t.tier === 9 ? ui.mythicArt : null) }}>
+            <CatchArt name={t.name} size={124} animated={t.tier === 9} />
           </div>
           <div style={{ fontWeight: 800 }}>{t.name}</div>
           <div style={ui.sub}>
@@ -80,9 +81,9 @@ function FishdexTab({ store }: { store: PlayerStore }) {
         {species.map((f) => {
           const e = store.fishdex[f.name];
           return (
-            <div key={f.name} style={{ ...ui.dexCard, opacity: e ? 1 : 0.6 }}>
+            <div key={f.name} style={{ ...ui.dexCard, opacity: e ? 1 : 0.6, ...(e && f.tier === 9 ? ui.mythicCard : null) }}>
               {/* undiscovered species show as a blacked-out silhouette */}
-              <div style={ui.dexArt}>
+              <div style={{ ...ui.dexArt, ...(e && f.tier === 9 ? ui.mythicArt : null) }}>
                 <span style={{ display: "flex", filter: e ? "none" : "brightness(0) opacity(0.35)" }}>
                   <CatchArt name={f.name} color={f.color} size={110} />
                 </span>
@@ -135,4 +136,11 @@ const ui: Record<string, CSSProperties> = {
   dexCard: { background: "rgba(255,255,255,0.7)", borderRadius: 12, padding: "10px 12px" },
   dexStats: { fontSize: 11, opacity: 0.75, marginTop: 3 },
   sub: { fontSize: 12, opacity: 0.7 },
+  // T9 mythic treatment: gold border + animated golden shimmer behind the art.
+  mythicCard: { border: "2px solid #f4c453", boxShadow: "0 0 12px rgba(244,196,83,0.5)" },
+  mythicArt: {
+    background: "linear-gradient(120deg, #f0d06a, #ffe89a, #fff4c8, #ffd75e, #f0d06a)",
+    backgroundSize: "300% 300%",
+    animation: "mythicShimmer 4s ease-in-out infinite",
+  },
 };

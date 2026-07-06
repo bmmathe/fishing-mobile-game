@@ -9,6 +9,7 @@ import {
   type LineSpec,
 } from "./fishingModel";
 import {
+  getFishByName,
   getTier,
   poolFor,
   randomFishFromPool,
@@ -63,6 +64,9 @@ export class FishingStore {
   hasHook?: () => boolean;
   /** Called when the line snaps — destroys the equipped hook. */
   onLineSnap?: () => void;
+
+  /** Called once per landed non-junk fish — triggers the spot's 6h lock. */
+  onLanded?: (spot: Spot) => void;
 
   /** Selected difficulty tier (1–8) and water type — which pool we're fishing. */
   selectedTier = 1;
@@ -260,8 +264,14 @@ export class FishingStore {
     const baited = !!this.baitForTiers && (this.hasBait?.() ?? false);
     const spot = this.currentSpot;
     if (spot) {
-      const tiers = baited ? this.boostTiers(spot.tiers) : spot.tiers;
-      this._fish = this.withHookHold(randomFishFromPool(pickTier(tiers), spot.water, Math.random, spot.access));
+      // Mythic roll first: the spot's storied one can steal the hook outright.
+      const myth = spot.mythic ? getFishByName(spot.mythic.fish) : undefined;
+      if (myth && Math.random() < spot.mythic!.chance) {
+        this._fish = this.withHookHold(myth);
+      } else {
+        const tiers = baited ? this.boostTiers(spot.tiers) : spot.tiers;
+        this._fish = this.withHookHold(randomFishFromPool(pickTier(tiers), spot.water, Math.random, spot.access));
+      }
     } else {
       this._fish = this.withHookHold(randomFishFromPool(this.selectedTier, this.selectedWater, Math.random, "land"));
     }
@@ -342,6 +352,9 @@ export class FishingStore {
         };
         this.state.message = `Landed a ${weightKg} kg ${f.name}!`;
         sfx.landedFish(f.tier);
+        // The first landing (not keep) locks the spot for re-entry — the
+        // session continues, but you can't come back until the lock expires.
+        if (this.currentSpot) this.onLanded?.(this.currentSpot);
       }
     }
 

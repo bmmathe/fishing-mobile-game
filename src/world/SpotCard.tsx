@@ -1,5 +1,6 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { Spot } from "./regions";
+import { fmtRestLeft } from "../game/spotRest";
 
 const QUALITY_COLORS: Record<string, string> = {
   S: "#a8343c",
@@ -28,6 +29,7 @@ export function SpotCard({
   currency,
   offersBoat,
   canBoat,
+  restUntil,
   onFishFoot,
   onBoat,
   onClose,
@@ -38,6 +40,8 @@ export function SpotCard({
   currency: number;
   offersBoat: boolean;
   canBoat: boolean;
+  /** Epoch ms when the spot's lock ends (0 = fishable now). */
+  restUntil: number;
   onFishFoot: (s: Spot) => void;
   onBoat: (s: Spot) => void;
   onClose: () => void;
@@ -46,6 +50,38 @@ export function SpotCard({
   const tierRange = `T${Math.min(...tiers)}–T${Math.max(...tiers)}`;
   const canAffordFoot = footFee === 0 || currency >= footFee;
   const canAffordBoat = currency >= boatFee;
+  // Live countdown while resting; flips the card back to fishable on expiry.
+  const [now, setNow] = useState(() => Date.now());
+  const resting = restUntil > now;
+  useEffect(() => {
+    if (restUntil <= Date.now()) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [restUntil]);
+
+  if (resting) {
+    return (
+      <div style={card.backdrop} onClick={onClose}>
+        <div style={card.panel} onClick={(e) => e.stopPropagation()}>
+          <div style={card.headerRow}>
+            <span style={{ ...card.quality, background: QUALITY_COLORS[spot.quality] }}>{spot.quality}</span>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 17 }}>{spot.name}</div>
+              <div style={{ fontSize: 12, opacity: 0.75 }}>
+                {spot.water === "fresh" ? "🟦 Freshwater" : "🌊 Saltwater"} · {BODY_LABEL[spot.body]} · {tierRange}
+              </div>
+            </div>
+          </div>
+          <div style={card.locked}>
+            🌙 Fished out — the fish return in <b>{fmtRestLeft(restUntil - now)}</b>
+          </div>
+          <button style={card.closeBtn} onClick={onClose}>
+            Back to map
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={card.backdrop} onClick={onClose}>

@@ -3,15 +3,16 @@ import type { Catch, FishingStore } from "./fishingStore";
 import { TIERS, getTier, type Water } from "./fishCatalog";
 import type { CaughtFish } from "../game/playerStore";
 import { fishValue } from "../game/gear";
+import { fmtRestLeft } from "../game/spotRest";
 import { CatchArt } from "./CatchArt";
 import { sfx } from "../audio/sfx";
 import { MuteButton } from "../ui/MuteButton";
 import { Stick } from "../ui/Stick";
 
-// Difficulty ramp across the 8 tiers (green → red) + a label per tier.
-const TIER_COLORS = ["#6fae74", "#8fbf64", "#c9c24f", "#e8b24a", "#e8934a", "#e0743f", "#d4564f", "#a8343c"];
-const TIER_WORDS = ["Novice", "Easy", "Moderate", "Hard", "Expert", "Master", "Elite", "Legendary"];
-const tierColor = (t: number) => TIER_COLORS[Math.min(Math.max(t, 1), 8) - 1];
+// Difficulty ramp across the tiers (green → red, gold for mythic) + a label per tier.
+const TIER_COLORS = ["#6fae74", "#8fbf64", "#c9c24f", "#e8b24a", "#e8934a", "#e0743f", "#d4564f", "#a8343c", "#d4a017"];
+const TIER_WORDS = ["Novice", "Easy", "Moderate", "Hard", "Expert", "Master", "Elite", "Legendary", "Mythic"];
+const tierColor = (t: number) => TIER_COLORS[Math.min(Math.max(t, 1), TIER_COLORS.length) - 1];
 
 export interface BaitBarProps {
   options: { id: string; name: string; count: number; hint: string }[];
@@ -27,6 +28,8 @@ export interface CoolerInfo {
   full: boolean;
   /** The catches currently kept in the cooler (most-recent last). */
   items: CaughtFish[];
+  /** Cooler re-icing: ms until keeping fish is allowed again (0 = open). */
+  keepLockedMs: number;
 }
 
 export function FishingHud({
@@ -111,10 +114,11 @@ export function FishingHud({
       {/* Cooler fill — the session limiter; tap to see what you've kept */}
       {cooler && (
         <button
-          style={{ ...ui.coolerChip, ...(cooler.full ? ui.coolerFull : null) }}
+          style={{ ...ui.coolerChip, ...(cooler.full || cooler.keepLockedMs > 0 ? ui.coolerFull : null) }}
           onClick={() => { sfx.uiTap(); setCoolerOpen(true); }}
         >
           🧊 Cooler {cooler.count}/{cooler.cap}
+          {cooler.keepLockedMs > 0 && ` · re-icing ${fmtRestLeft(cooler.keepLockedMs)}`}
         </button>
       )}
 
@@ -127,6 +131,7 @@ export function FishingHud({
           c={pending}
           fallbackColor={store.fish.color}
           coolerFull={cooler?.full ?? false}
+          keepLockedMs={cooler?.keepLockedMs ?? 0}
           onKeep={() => store.keepCatch()}
           onTrash={() => store.dismissCatch()}
         />
@@ -438,26 +443,53 @@ function CatchModal({
   c,
   fallbackColor,
   coolerFull,
+  keepLockedMs,
   onKeep,
   onTrash,
 }: {
   c: Catch;
   fallbackColor: string;
   coolerFull: boolean;
+  /** Cooler re-icing: ms until keeps re-open (0 = keeping allowed). */
+  keepLockedMs: number;
   onKeep: () => void;
   onTrash: () => void;
 }) {
   const value = c.isJunk ? 0 : fishValue(c.tier, c.weightKg);
-  const fullRelease = !c.isJunk && coolerFull;
+  const fullRelease = !c.isJunk && (coolerFull || keepLockedMs > 0);
+  const mythic = !c.isJunk && c.tier === 9;
   return (
     <div style={ui.coolerBackdrop}>
-      <style>{`@keyframes catchPop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
-      <div style={{ ...ui.catchPanel, animation: "catchPop 0.28s ease-out" }}>
-        <div style={ui.catchBanner}>{c.isJunk ? "You hauled in…" : "You caught…"}</div>
-        <div style={{ ...ui.catchArtWrap, background: c.isJunk ? "#e8e4d6" : "#dceef0" }}>
-          <CatchArt name={c.name} color={fallbackColor} size={230} />
+      <style>{`
+        @keyframes catchPop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes mythicShimmer { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        @keyframes mythicGlow { 0%, 100% { box-shadow: 0 0 18px 4px rgba(244,196,83,0.55), 0 14px 44px rgba(0,0,0,0.35); } 50% { box-shadow: 0 0 34px 10px rgba(244,196,83,0.85), 0 14px 44px rgba(0,0,0,0.35); } }
+      `}</style>
+      <div
+        style={{
+          ...ui.catchPanel,
+          animation: mythic ? "catchPop 0.28s ease-out, mythicGlow 2.4s ease-in-out infinite" : "catchPop 0.28s ease-out",
+          ...(mythic ? { border: "2px solid #f4c453" } : null),
+        }}
+      >
+        <div style={mythic ? ui.catchBannerMythic : ui.catchBanner}>
+          {c.isJunk ? "You hauled in…" : mythic ? "✨ A MYTHIC takes the hook ✨" : "You caught…"}
         </div>
-        <div style={ui.catchName}>{c.name}</div>
+        <div
+          style={{
+            ...ui.catchArtWrap,
+            ...(mythic
+              ? {
+                  background: "linear-gradient(120deg, #f0d06a, #ffe89a, #fff4c8, #ffd75e, #f0d06a)",
+                  backgroundSize: "300% 300%",
+                  animation: "mythicShimmer 4s ease-in-out infinite",
+                }
+              : { background: c.isJunk ? "#e8e4d6" : "#dceef0" }),
+          }}
+        >
+          <CatchArt name={c.name} color={fallbackColor} size={230} animated={mythic} />
+        </div>
+        <div style={{ ...ui.catchName, ...(mythic ? { color: "#a8790f" } : null) }}>{c.name}</div>
 
         {c.isJunk ? (
           <div style={ui.catchMeta}>Not worth a dime. Keep the waters clean!</div>
@@ -474,7 +506,13 @@ function CatchModal({
             🪱 Keeps as bait — lures T{Math.min(...c.bait.forTiers)}–T{Math.max(...c.bait.forTiers)}
           </div>
         )}
-        {fullRelease && <div style={ui.catchFullWarn}>🧊 Cooler full — it'll be released</div>}
+        {fullRelease && (
+          <div style={ui.catchFullWarn}>
+            {keepLockedMs > 0 && !coolerFull
+              ? `🧊 Cooler re-icing (${fmtRestLeft(keepLockedMs)}) — it'll be released`
+              : "🧊 Cooler full — it'll be released"}
+          </div>
+        )}
 
         <button
           style={{ ...ui.catchBtn, background: c.isJunk ? "#8a8f96" : fullRelease ? "#c98a5a" : "#3f9e6a" }}
@@ -666,6 +704,7 @@ const ui: Record<string, CSSProperties> = {
   coolerWarn: { fontWeight: 700, color: "#c0392b", textAlign: "center", maxWidth: 260, marginTop: 2 },
   catchPanel: { width: "min(340px, 92vw)", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "#f4f1e8", borderRadius: 22, boxShadow: "0 14px 44px rgba(0,0,0,0.35)", padding: "16px 18px 18px", color: "#3c5a57" },
   catchBanner: { fontSize: 13, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", opacity: 0.65 },
+  catchBannerMythic: { fontSize: 13, fontWeight: 800, letterSpacing: 0.8, textTransform: "uppercase", color: "#a8790f" },
   catchArtWrap: { borderRadius: 16, padding: "4px 0", width: "100%", display: "flex", justifyContent: "center", boxShadow: "inset 0 1px 4px rgba(0,0,0,0.08)" },
   catchName: { fontSize: 21, fontWeight: 800, textAlign: "center", lineHeight: 1.15 },
   catchStats: { display: "flex", alignItems: "center", gap: 12, fontSize: 14 },

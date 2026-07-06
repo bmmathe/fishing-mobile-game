@@ -32,6 +32,22 @@ export interface TierWeight {
   weight: number;
 }
 
+/**
+ * Mythic (T9) hook rates: the probability that a cast at the spot hooks the
+ * spot's mythic INSTEAD of rolling the normal tier pool. Endgame boat spots
+ * each host a unique mythic at 1.5%; every starter-region easy spot shares one
+ * ultra-rare legend at 0.001% (yes, percent — one bite in 100,000 casts).
+ */
+export const MYTHIC_CHANCE_ENDGAME = 0.015;
+export const MYTHIC_CHANCE_STARTER = 0.001;
+
+export interface SpotMythic {
+  /** Catalog name of the T9 fish haunting this spot. */
+  fish: string;
+  /** Per-cast probability it takes the hook (0..1). */
+  chance: number;
+}
+
 export interface Spot {
   id: string;
   name: string;
@@ -42,6 +58,8 @@ export interface Spot {
   access: Access;
   quality: HoleQuality;
   tiers: TierWeight[];
+  /** The T9 mythic that can steal the hook here, if any. */
+  mythic?: SpotMythic;
   /** Position on the region map (x, z). */
   pos: [number, number];
 }
@@ -142,6 +160,8 @@ interface SpotInput {
   pos?: [number, number];
   /** Override the body's default tier pool (central regions skew higher). */
   tiers?: [number, number][];
+  /** Name of this spot's unique endgame mythic (T9), hooked at MYTHIC_CHANCE_ENDGAME. */
+  mythic?: string;
 }
 
 interface RegionInput {
@@ -167,6 +187,14 @@ function makeRegion({ id, name, blurb, travelCost, central, spots }: RegionInput
     // Duplicate body types in one region need explicit `pos` to avoid overlap.
     spots: spots.map((s, i) => {
       const base = BODY[s.body];
+      // Endgame spots name their own mythic; the coastal starting regions'
+      // easiest waters (stream/beach) all share the ultra-rare Glimmerwish.
+      const starterWater = !central && (s.body === "stream" || s.body === "beach");
+      const mythic: SpotMythic | undefined = s.mythic
+        ? { fish: s.mythic, chance: MYTHIC_CHANCE_ENDGAME }
+        : starterWater
+          ? { fish: "Glimmerwish", chance: MYTHIC_CHANCE_STARTER }
+          : undefined;
       return {
         id: `${id}-${s.body}-${i}`,
         name: s.name,
@@ -177,6 +205,7 @@ function makeRegion({ id, name, blurb, travelCost, central, spots }: RegionInput
         access: base.access,
         quality: s.quality ?? base.quality,
         tiers: s.tiers ? tw(s.tiers) : base.tiers,
+        mythic,
         pos: s.pos ?? base.pos,
       };
     }),
@@ -186,105 +215,105 @@ function makeRegion({ id, name, blurb, travelCost, central, spots }: RegionInput
 export const REGIONS: Region[] = [
   // --- Coastal starting regions (broad T1–5, cheap travel) ---
   makeRegion({
-    id: "pnw", name: "Pacific Northwest", travelCost: 300,
+    id: "pnw", name: "Pacific Northwest", travelCost: 1000,
     blurb: "Misty rivers, deep cold lakes, and a rugged Pacific coast.",
     spots: [
       { body: "stream", name: "Cascade Creek", blurb: "Snowmelt riffles full of little forage fish." },
       { body: "river", name: "Columbia River", blurb: "Mighty river run — trout, salmon, and steelhead." },
       { body: "lake", name: "Lake Washington", blurb: "City lake with scrappy bass and trout." },
       { body: "dock", name: "Lake Union Docks", blurb: "Private docks over deeper water — bigger fish, small fee." },
-      { body: "deep-lake", name: "Lake Roosevelt", blurb: "Vast reservoir hiding monster sturgeon.", quality: "A" },
+      { body: "deep-lake", name: "Lake Roosevelt", blurb: "Vast reservoir hiding monster sturgeon.", quality: "A", mythic: "Raincaller" },
       { body: "beach", name: "Westport Beach", blurb: "Surf-cast for forage along the Pacific sand." },
       { body: "pier", name: "Seattle Pier", blurb: "Puget Sound pier — rockfish to salmon." },
-      { body: "offshore", name: "Pacific Bluewater", blurb: "Open ocean. Tuna and the truly huge.", quality: "S" },
+      { body: "offshore", name: "Pacific Bluewater", blurb: "Open ocean. Tuna and the truly huge.", quality: "S", mythic: "The Moonveil" },
     ],
   }),
   makeRegion({
-    id: "california", name: "California", travelCost: 350,
+    id: "california", name: "California", travelCost: 1100,
     blurb: "Delta sloughs, Sierra lakes, and warm Pacific surf.",
     spots: [
       { body: "stream", name: "Sierra Creek", blurb: "High-country trickle of bait and panfish." },
       { body: "river", name: "Sacramento Delta", blurb: "Sprawling delta — stripers and sturgeon." },
       { body: "lake", name: "Clear Lake", blurb: "Legendary bass factory.", quality: "A" },
       { body: "dock", name: "Tahoe Boat Docks", blurb: "Deep-water docks — premium lake fishing for a fee." },
-      { body: "deep-lake", name: "Lake Shasta", blurb: "Deep, cold, and full of giants." },
+      { body: "deep-lake", name: "Lake Shasta", blurb: "Deep, cold, and full of giants.", mythic: "Gold Rush Ghost" },
       { body: "beach", name: "Huntington Beach", blurb: "Classic SoCal surf fishing." },
       { body: "pier", name: "Santa Monica Pier", blurb: "Iconic pier over the kelp." },
-      { body: "offshore", name: "San Diego Bluewater", blurb: "Tuna alley and marlin grounds.", quality: "S" },
+      { body: "offshore", name: "San Diego Bluewater", blurb: "Tuna alley and marlin grounds.", quality: "S", mythic: "El Dorado" },
     ],
   }),
   makeRegion({
-    id: "gulf", name: "Gulf Coast", travelCost: 300,
+    id: "gulf", name: "Gulf Coast", travelCost: 1000,
     blurb: "Bayous, trophy bass lakes, and the warm Gulf.",
     spots: [
       { body: "stream", name: "Caddo Creek", blurb: "Cypress-shaded creek of minnows." },
       { body: "river", name: "Atchafalaya Bayou", blurb: "Sprawling swamp — catfish country." },
       { body: "lake", name: "Lake Fork", blurb: "The bass capital of Texas.", quality: "A" },
       { body: "dock", name: "Lake Fork Docks", blurb: "Pay the dock fee for the lake's best water." },
-      { body: "deep-lake", name: "Sam Rayburn", blurb: "Big reservoir, bigger fish." },
+      { body: "deep-lake", name: "Sam Rayburn", blurb: "Big reservoir, bigger fish.", mythic: "The Bayou King" },
       { body: "beach", name: "Galveston Beach", blurb: "Gulf surf for croaker and reds." },
       { body: "pier", name: "Gulf Shores Pier", blurb: "Long pier into warm water." },
-      { body: "offshore", name: "Gulf Bluewater", blurb: "Rigs and reefs — tuna and grouper.", quality: "S" },
+      { body: "offshore", name: "Gulf Bluewater", blurb: "Rigs and reefs — tuna and grouper.", quality: "S", mythic: "Doubloonscale" },
     ],
   }),
   makeRegion({
-    id: "florida", name: "Florida / Southeast", travelCost: 400,
+    id: "florida", name: "Florida / Southeast", travelCost: 1200,
     blurb: "Endless lakes, spring rivers, and bluewater legends.",
     spots: [
       { body: "stream", name: "Spring Creek", blurb: "Crystal spring run teeming with bait." },
       { body: "river", name: "St. Johns River", blurb: "Slow tannic river — bass and panfish." },
       { body: "lake", name: "Lake Okeechobee", blurb: "The Big O — famous for giant bass.", quality: "A" },
       { body: "dock", name: "Okeechobee Docks", blurb: "Rim-canal docks over prime bass water." },
-      { body: "deep-lake", name: "Okeechobee Deep", blurb: "Open-water trolling for the biggest." },
+      { body: "deep-lake", name: "Okeechobee Deep", blurb: "Open-water trolling for the biggest.", mythic: "The Glades Wyrm" },
       { body: "beach", name: "Cocoa Beach", blurb: "Atlantic surf and pompano." },
       { body: "pier", name: "Naples Pier", blurb: "Gulf-side pier sunsets and snook." },
-      { body: "offshore", name: "Florida Keys", blurb: "Marlin, sailfish, swordfish. The dream.", quality: "S" },
+      { body: "offshore", name: "Florida Keys", blurb: "Marlin, sailfish, swordfish. The dream.", quality: "S", mythic: "Stormcrown Sailfish" },
     ],
   }),
 
   // --- Central regions (higher-tier T3–5 land, pricey travel; reach via travel) ---
   makeRegion({
-    id: "mountainwest", name: "Mountain West", travelCost: 2000, central: true,
+    id: "mountainwest", name: "Mountain West", travelCost: 4000, central: true,
     blurb: "Alpine lakes and rushing rivers — bigger, harder fish.",
     spots: [
       { body: "river", name: "Snake River", blurb: "Cold, fast water — trout and pike.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-5, 2] },
       { body: "lake", name: "Flathead Lake", blurb: "Huge alpine lake of lake trout.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-1, -2] },
       { body: "lake", name: "Alpine Tarn", blurb: "Glacial pool, surprisingly toothy.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-6, -3.5] },
       { body: "dock", name: "Flathead Marina", blurb: "Premium dock over the deep channel.", tiers: [[4, 0.4], [5, 0.6]], pos: [-1, 2.5] },
-      { body: "deep-lake", name: "Glacier Depths", blurb: "Sunless deep — true giants.", quality: "A", pos: [-3, 5] },
+      { body: "deep-lake", name: "Glacier Depths", blurb: "Sunless deep — true giants.", quality: "A", mythic: "Frostjaw", pos: [-3, 5] },
     ],
   }),
   makeRegion({
-    id: "greatplains", name: "Great Plains", travelCost: 1800, central: true,
+    id: "greatplains", name: "Great Plains", travelCost: 3600, central: true,
     blurb: "Prairie reservoirs and big-river catfish.",
     spots: [
       { body: "river", name: "Missouri River", blurb: "Wide and slow — flathead country.", tiers: [[3, 0.4], [4, 0.4], [5, 0.2]], pos: [-5, 1] },
       { body: "lake", name: "Lake Oahe", blurb: "Vast reservoir — walleye and pike.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-2, -2] },
       { body: "lake", name: "Farm Reservoir", blurb: "Quiet water, fat bass.", tiers: [[3, 0.5], [4, 0.4], [5, 0.1]], pos: [-6, -3] },
       { body: "dock", name: "Oahe Marina", blurb: "Pay-to-fish dock over the old river channel.", tiers: [[4, 0.4], [5, 0.6]], pos: [-1, 2.5] },
-      { body: "deep-lake", name: "Oahe Deep", blurb: "Open-water trolling for monsters.", quality: "A", pos: [-3, 5] },
+      { body: "deep-lake", name: "Oahe Deep", blurb: "Open-water trolling for monsters.", quality: "A", mythic: "Stormwhisker", pos: [-3, 5] },
     ],
   }),
   makeRegion({
-    id: "midwest", name: "Midwest / Great Lakes", travelCost: 3000, central: true,
+    id: "midwest", name: "Midwest / Great Lakes", travelCost: 6000, central: true,
     blurb: "The inland seas — trophy water through and through.",
     spots: [
       { body: "lake", name: "Lake Michigan", blurb: "Inland sea of salmon and trout.", quality: "A", tiers: [[4, 0.5], [5, 0.5]], pos: [-5, -2] },
       { body: "lake", name: "Lake Erie", blurb: "Walleye capital of the world.", tiers: [[4, 0.45], [5, 0.4], [3, 0.15]], pos: [-1, 0] },
       { body: "river", name: "Mississippi Headwaters", blurb: "Where the great river begins.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-6, 2.5] },
       { body: "dock", name: "Chicago Harbor", blurb: "Big-water harbor dock for a fee.", tiers: [[4, 0.4], [5, 0.6]], pos: [-2, -4] },
-      { body: "deep-lake", name: "Superior Deep", blurb: "Cold, black, and bottomless.", quality: "S", pos: [-3, 5] },
+      { body: "deep-lake", name: "Superior Deep", blurb: "Cold, black, and bottomless.", quality: "S", mythic: "Lanternmaw", pos: [-3, 5] },
     ],
   }),
   makeRegion({
-    id: "northeast", name: "Northeast", travelCost: 2500, central: true,
+    id: "northeast", name: "Northeast", travelCost: 5000, central: true,
     blurb: "Storied rivers and the cold Atlantic coast.",
     spots: [
       { body: "river", name: "Hudson River", blurb: "Tidal river — stripers and shad.", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [-4, 1] },
       { body: "dock", name: "Champlain Docks", blurb: "Lakeside docks for a fee — lake trout & pike.", tiers: [[4, 0.4], [5, 0.6]], pos: [-2, -3] },
       { body: "beach", name: "Montauk Point", blurb: "The surfcasting mecca.", quality: "A", tiers: [[3, 0.45], [4, 0.4], [5, 0.15]], pos: [5, -3] },
       { body: "pier", name: "Cape Cod Pier", blurb: "Cold-water blues and bass.", tiers: [[3, 0.4], [4, 0.35], [5, 0.25]], pos: [6, 1] },
-      { body: "offshore", name: "Georges Bank", blurb: "Legendary cod & tuna grounds.", quality: "S", pos: [7, 4] },
+      { body: "offshore", name: "Georges Bank", blurb: "Legendary cod & tuna grounds.", quality: "S", mythic: "The Fogbank King", pos: [7, 4] },
     ],
   }),
 ];

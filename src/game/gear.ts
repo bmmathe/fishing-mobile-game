@@ -41,28 +41,34 @@ export const LINE_TIERS: LineTier[] = [
   { name: "Starter Line", maxTension: 0.78, price: 0 }, // T1-2 comfy, T3-4 hard
   { name: "Braided Line", maxTension: 1.8, price: 150 }, // eases T3-4
   { name: "Fluorocarbon", maxTension: 3.4, price: 650 }, // unlocks T5
-  { name: "Steel Leader", maxTension: 6, price: 2800 }, // unlocks T6, T7 possible
-  { name: "Deep-Sea Cable", maxTension: 10, price: 11000 }, // T7 comfy, T8 possible
+  { name: "Steel Leader", maxTension: 6, price: 5600 }, // unlocks T6, T7 possible
+  { name: "Deep-Sea Cable", maxTension: 10, price: 20000 }, // T7 comfy, T8 possible
 ];
 
 export const POLE_TIERS: PoleTier[] = [
   { name: "Cane Pole", reelMult: 1.0, price: 0 },
   { name: "Spinning Rod", reelMult: 1.2, price: 250 },
   { name: "Baitcaster", reelMult: 1.45, price: 1000 },
-  { name: "Offshore Rod", reelMult: 1.75, price: 4000 },
-  { name: "Game Reel", reelMult: 2.1, price: 14000 },
+  { name: "Offshore Rod", reelMult: 1.75, price: 8000 },
+  { name: "Game Reel", reelMult: 2.1, price: 20000 },
 ];
 
 // 4 boats: T1 is lake-only & slow; higher tiers are faster and ocean-capable.
 export const BOAT_TIERS: BoatTier[] = [
-  { name: "Jon Boat", price: 2500, speed: 1.0, ocean: false },
-  { name: "Bass Boat", price: 8000, speed: 1.4, ocean: true },
-  { name: "Center Console", price: 25000, speed: 1.85, ocean: true },
-  { name: "Offshore Cruiser", price: 70000, speed: 2.4, ocean: true },
+  { name: "Jon Boat", price: 5000, speed: 1.0, ocean: false },
+  { name: "Bass Boat", price: 16000, speed: 1.4, ocean: true },
+  { name: "Center Console", price: 50000, speed: 1.85, ocean: true },
+  { name: "Offshore Cruiser", price: 140000, speed: 2.4, ocean: true },
 ];
 
-/** Base sell value per tier (before the weight bonus). */
-const TIER_BASE = [0, 3, 8, 20, 50, 120, 320, 750, 1700];
+/**
+ * Base sell value per tier (before the weight bonus). T9 = mythic jackpot.
+ * These are the NPC market's FLOOR prices — deliberately stingy (steeper cut at
+ * high tiers) because the 24-slot cooler caps keeps per re-ice cycle, and
+ * player-to-player auctions will eventually set the real market for good fish.
+ * Tuned via `npm run sim:pacing`.
+ */
+const TIER_BASE = [0, 3, 8, 18, 40, 90, 140, 300, 650, 1500];
 
 /**
  * Sell value of a landed fish: scales with tier (steeply) and weight (a fish at

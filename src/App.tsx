@@ -43,12 +43,15 @@ export default function App() {
     store.onLineSnap = () => {
       player.consumeHookOnSnap();
     };
+    // Spot lock: the first landed fish of a session locks the spot's re-entry.
+    store.onLanded = (spot) => player.lockSpot(spot);
     return () => {
       store.onCatch = undefined;
       store.hasBait = undefined;
       store.consumeBait = undefined;
       store.hasHook = undefined;
       store.onLineSnap = undefined;
+      store.onLanded = undefined;
     };
   }, [store, player]);
 
@@ -137,7 +140,12 @@ export default function App() {
           onTravel={() => setView("travel")}
           canBoat={(water) => player.canBoat(water)}
           footFeeFor={(spot) => (isFreeFoot(spot.body) ? 0 : fishFee(spot.quality, false))}
+          restUntilFor={(spot) => player.restUntil(spot)}
           onFishFoot={(spot: Spot) => {
+            if (player.isResting(spot)) {
+              sfx.denied();
+              return;
+            }
             const fee = isFreeFoot(spot.body) ? 0 : fishFee(spot.quality, false);
             if (player.payFishFee(fee)) {
               if (fee > 0) sfx.buy();
@@ -153,6 +161,10 @@ export default function App() {
           onBoat={(spot: Spot) => {
             // One boat fee, paid when you launch — buoy fishing is then free
             // for the whole trip.
+            if (player.isResting(spot)) {
+              sfx.denied();
+              return;
+            }
             if (player.payFishFee(fishFee(spot.quality, true))) {
               sfx.buy();
               setBoatWater(spot.water);
@@ -169,7 +181,12 @@ export default function App() {
           region={region}
           water={boatWater}
           boatSpeed={player.boatSpeed}
+          restUntilFor={(spot: Spot) => player.restUntil(spot)}
           onFish={(spot: Spot) => {
+            if (player.isResting(spot)) {
+              sfx.denied();
+              return;
+            }
             // Trip fee was already paid at launch — fishing here is free.
             store.setSpot(spot);
             setFishingReturn("boat");
@@ -201,7 +218,13 @@ export default function App() {
           onExit={() => setView(fishingReturn)}
           bait={baitBar}
           hooks={hookBar}
-          cooler={{ count: player.inventory.length, cap: COOLER_CAP, full: player.coolerFull, items: player.inventory }}
+          cooler={{
+            count: player.inventory.length,
+            cap: COOLER_CAP,
+            full: player.coolerFull,
+            items: player.inventory,
+            keepLockedMs: player.coolerLockMs(),
+          }}
           tutorial={!player.tutorialDone}
         />
       )}
