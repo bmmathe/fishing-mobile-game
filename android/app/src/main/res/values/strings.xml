@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">World of Fishing</string>
-    <string name="title_activity_main">World of Fishing</string>
+    <string name="app_name">Mythic Fishing</string>
+    <string name="title_activity_main">Mythic Fishing</string>
     <string name="package_name">com.bitforgeventures.fishinggame</string>
     <string name="custom_url_scheme">com.bitforgeventures.fishinggame</string>
 </resources>
