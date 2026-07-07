@@ -141,6 +141,8 @@ export const TUNING = {
   /** Seconds an average player needs to START steering — the fish moves at the
    *  slow floor for this long after the hook is set. */
   rampDelay: 1.0,
+  /** Seconds after the hook is set before snap / throw / shake-off can occur. */
+  lossGrace: 1.0,
   /** Fraction of full lateral speed/amplitude during the opening. */
   rampFloor: 0.3,
   /** Fallback FishSpec.rampSec (seconds from grace end to full pace). */
@@ -214,7 +216,7 @@ export function stepFight(
       if (s.waitTimer <= 0) {
         s.phase = "bite";
         s.biteTimer = TUNING.biteWindow;
-        s.message = "Fish on! PULL!";
+        s.message = "";
       }
       return s;
     }
@@ -328,9 +330,11 @@ export function stepFight(
   }
   s.stamina = clamp(s.stamina, 0, 1);
 
-  // --- Fail / win checks ---
+  // --- Fail / win checks (skipped during the post-hook reaction grace) ---
+  const inLossGrace = s.fightTime < TUNING.lossGrace;
+
   // Snap: tension over the line's limit for too long.
-  if (s.tension >= line.maxTension) {
+  if (!inLossGrace && s.tension >= line.maxTension) {
     s.overTime += dt;
     if (s.overTime >= TUNING.snapGrace) {
       s.phase = "lost";
@@ -343,7 +347,7 @@ export function stepFight(
   }
 
   // Throw: too slack while the fish is running pulls the hook free.
-  if (s.running && s.tension < TUNING.slackThreshold) {
+  if (!inLossGrace && s.running && s.tension < TUNING.slackThreshold) {
     s.slackTime += dt;
     if (s.slackTime >= TUNING.throwGrace) {
       s.phase = "lost";
@@ -360,7 +364,7 @@ export function stepFight(
   // zero, so small fish carry an irreducible chance of getting away — the
   // dominant failure mode at low tiers, where the line rarely snaps.
   const hold = fish.hookHold ?? 1;
-  if (s.running && hold < 1) {
+  if (!inLossGrace && s.running && hold < 1) {
     const ratio = s.tension / line.maxTension;
     const wellManaged = ratio >= TUNING.slipBandLo && ratio <= TUNING.slipBandHi;
     const hazard = TUNING.slipHazard * (1 - hold) * (wellManaged ? TUNING.slipControlFloor : 1);

@@ -95,16 +95,11 @@ export function FishingHud({
   const waiting = s.phase === "waiting" || s.phase === "bite";
   const showCast = s.phase === "idle" || s.phase === "landed" || s.phase === "lost";
   const isJunk = store.fish.kind === "junk";
-  const nibbling = store.nibbling;
   const pending = store.lastCatch;
-  // Don't reveal the species until the catch modal after landing. The catch
-  // modal replaces the center message while it's open. (During the bite phase
-  // s.message carries "Fish on! PULL!".)
-  const centerMsg = pending
-    ? null
-    : s.phase === "waiting"
-      ? (nibbling ? "Something's nibbling…" : "Waiting for a bite…")
-      : s.message;
+  // Don't reveal the species until the catch modal after landing. While waiting
+  // or biting, the bobber is the tell — no center text to steal attention.
+  const centerMsg =
+    pending || s.phase === "waiting" || s.phase === "bite" ? null : s.message;
 
   return (
     <div style={ui.root}>
@@ -177,10 +172,8 @@ export function FishingHud({
               ? "#2e7d4f"
               : s.result === "lost"
                 ? "#c0392b"
-                : nibbling
-                  ? "#d98a4f"
-                  : "#3c5a57",
-            fontSize: s.result || nibbling ? 24 : 18,
+                : "#3c5a57",
+            fontSize: s.result ? 24 : 18,
           }}
         >
           {centerMsg}
@@ -381,7 +374,6 @@ function WaitPanel({ store }: { store: FishingStore }) {
       <button style={ui.pullBtn} onClick={() => store.tapHook()}>
         PULL!
       </button>
-      <div style={ui.pullHint}>Pull when the bobber dips under — too early scares it off</div>
     </div>
   );
 }
@@ -738,7 +730,6 @@ const ui: Record<string, CSSProperties> = {
   holeRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 15 },
   qualityBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, color: "#fff", fontWeight: 800, fontSize: 13 },
   pullBtn: { pointerEvents: "auto", border: "none", borderRadius: 26, padding: "16px 54px", fontSize: 20, fontWeight: 800, letterSpacing: 1, color: "#fff", background: "#d98a4f", boxShadow: "0 4px 14px rgba(0,0,0,0.25)", cursor: "pointer" },
-  pullHint: { fontSize: 11, fontWeight: 600, opacity: 0.75, maxWidth: 240, textAlign: "center" },
   castPanel: { pointerEvents: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.42)", borderRadius: 20, padding: "12px 16px", backdropFilter: "blur(4px)", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" },
   baitRow: { display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", maxWidth: 300 },
   baitChip: { border: "none", borderRadius: 12, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "#3c5a57", background: "rgba(255,255,255,0.7)", cursor: "pointer" },

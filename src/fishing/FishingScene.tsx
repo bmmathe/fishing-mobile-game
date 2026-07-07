@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { palette } from "../scene/palette";
 import { Cloud, Gull, Islet, Reeds, Rock } from "../world/MapDecor";
+import { TUNING } from "./fishingModel";
 import type { FishingStore } from "./fishingStore";
 
 /** How far out (in world Z) the fish sits at full starting distance. */
@@ -30,6 +31,7 @@ export function FishingScene({ store }: { store: FishingStore }) {
   const lineRef = useRef<THREE.Mesh>(null);
   const fishRef = useRef<THREE.Group>(null);
   const fishBodyRef = useRef<THREE.Mesh>(null);
+  const bobberVisualRef = useRef<THREE.Group>(null);
   const rippleRef = useRef<THREE.Mesh>(null);
   const waterRef = useRef<THREE.Mesh>(null);
 
@@ -45,13 +47,14 @@ export function FishingScene({ store }: { store: FishingStore }) {
     if (waterRef.current) waterRef.current.position.y = -0.05 + Math.sin(t * 0.6) * 0.04;
 
     const active = s.phase === "waiting" || s.phase === "bite" || s.phase === "fighting";
+    const biting = s.phase === "bite";
     if (fishRef.current) fishRef.current.visible = active;
     if (lineRef.current) lineRef.current.visible = active;
 
     // Rod load: bends toward the water as tension rises, tilts with steer.
     if (rodRef.current) {
       const bend = Math.min(s.tension / store.line.maxTension, 1.2) * 0.45;
-      rodRef.current.rotation.x = -bend - (s.phase === "bite" ? 0.15 : 0);
+      rodRef.current.rotation.x = -bend - (biting ? 0.22 : 0);
       rodRef.current.rotation.z = -store.input.steer * 0.18;
     }
 
@@ -64,15 +67,24 @@ export function FishingScene({ store }: { store: FishingStore }) {
     const splash = s.running ? Math.sin(t * 22) * 0.06 : 0;
     // Nibble tell: the bobber twitches and dips just before the bite.
     const nibbling = store.nibbling;
-    const dip = nibbling ? Math.max(0, Math.sin(t * 13)) * 0.1 : 0;
+    let dip = nibbling ? Math.max(0, Math.sin(t * 13)) * 0.1 : 0;
+    let bobberVisible = true;
+    if (biting) {
+      const elapsed = TUNING.biteWindow - s.biteTimer;
+      const sinkT = Math.min(1, elapsed / 0.38);
+      const eased = 1 - (1 - sinkT) ** 3;
+      dip = eased * 0.44;
+      bobberVisible = eased < 0.55;
+    }
     const jitter = nibbling ? Math.sin(t * 31) * 0.05 : 0;
     v.fish.set(fx + jitter, 0.06 + splash - dip, fz);
     fishRef.current.position.copy(v.fish);
+    if (bobberVisualRef.current) bobberVisualRef.current.visible = bobberVisible;
 
-    // Ripple pulse (faster/stronger on a run or a nibble).
+    // Ripple pulse (faster/stronger on a run, nibble, or hard bite).
     if (rippleRef.current) {
-      const rate = s.running ? 8 : nibbling ? 10 : 3;
-      const amp = s.running ? 0.9 : nibbling ? 0.7 : 0.4;
+      const rate = s.running ? 8 : biting ? 14 : nibbling ? 10 : 3;
+      const amp = s.running ? 0.9 : biting ? 1.25 : nibbling ? 0.7 : 0.4;
       const pulse = 1 + (Math.sin(t * rate) * 0.5 + 0.5) * amp;
       rippleRef.current.scale.set(pulse, pulse, pulse);
     }
@@ -234,20 +246,22 @@ export function FishingScene({ store }: { store: FishingStore }) {
 
       {/* Fish marker / bobber + ripple */}
       <group ref={fishRef}>
-        {/* top half: neutral red bobber — species is revealed only after landing */}
-        <mesh ref={fishBodyRef} position={[0, 0.08, 0]} castShadow>
-          <sphereGeometry args={[0.16, 10, 8]} />
-          <meshStandardMaterial color={RED} flatShading roughness={1} />
-        </mesh>
-        {/* white lower half + antenna: classic two-tone float */}
-        <mesh position={[0, 0.04, 0]}>
-          <sphereGeometry args={[0.14, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2]} />
-          <meshStandardMaterial color={palette.sail} flatShading roughness={1} />
-        </mesh>
-        <mesh position={[0, 0.26, 0]}>
-          <cylinderGeometry args={[0.018, 0.018, 0.1, 5]} />
-          <meshStandardMaterial color={palette.sail} flatShading roughness={1} />
-        </mesh>
+        <group ref={bobberVisualRef}>
+          {/* top half: neutral red bobber — species is revealed only after landing */}
+          <mesh ref={fishBodyRef} position={[0, 0.08, 0]} castShadow>
+            <sphereGeometry args={[0.16, 10, 8]} />
+            <meshStandardMaterial color={RED} flatShading roughness={1} />
+          </mesh>
+          {/* white lower half + antenna: classic two-tone float */}
+          <mesh position={[0, 0.04, 0]}>
+            <sphereGeometry args={[0.14, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2]} />
+            <meshStandardMaterial color={palette.sail} flatShading roughness={1} />
+          </mesh>
+          <mesh position={[0, 0.26, 0]}>
+            <cylinderGeometry args={[0.018, 0.018, 0.1, 5]} />
+            <meshStandardMaterial color={palette.sail} flatShading roughness={1} />
+          </mesh>
+        </group>
         {/* dark shape under the surface — "something's down there" */}
         <mesh position={[0, -0.06, 0.15]} rotation={[-Math.PI / 2, 0, 0]} scale={[0.6, 1, 1]}>
           <circleGeometry args={[0.42, 12]} />
