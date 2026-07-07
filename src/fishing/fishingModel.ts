@@ -33,7 +33,7 @@ export interface FishSpec {
   runStrength: number;
   /** Per-second probability the fish starts a new run (scaled by stamina). */
   runChance: number;
-  /** How quickly the fish changes lateral direction (steer counter window). */
+  /** How quickly the fish's lateral pull ramps (steer counter window). */
   agility: number;
   /** Starting distance to land, in abstract units. */
   startDistance: number;
@@ -83,6 +83,8 @@ export interface FightState {
   stamina: number;
   /** Target lateral pull direction, -1..1. */
   fishDir: number;
+  /** AI destination for fishDir — eased toward, never snapped. */
+  fishDirTarget: number;
   /** Smoothed actual lateral direction the fish is pulling, -1..1. */
   fishDirCurrent: number;
   /** True while the fish is making a run. */
@@ -143,6 +145,10 @@ export const TUNING = {
   rampFloor: 0.3,
   /** Fallback FishSpec.rampSec (seconds from grace end to full pace). */
   defaultRampSec: 3,
+  /** How fast fishDir eases toward fishDirTarget (higher = snappier commits). */
+  dirTargetEase: 1.2,
+  /** Scales agility when chasing fishDirCurrent (lower = more gradual swings). */
+  dirChaseScale: 0.38,
 } as const;
 
 export function makeFight(fish: FishSpec): FightState {
@@ -155,6 +161,7 @@ export function makeFight(fish: FishSpec): FightState {
     slackTime: 0,
     stamina: 1,
     fishDir: 0,
+    fishDirTarget: 0,
     fishDirCurrent: 0,
     running: false,
     runTimer: 0,
@@ -251,12 +258,12 @@ export function stepFight(
     TUNING.rampFloor + (1 - TUNING.rampFloor) * (tRamp / (fish.rampSec ?? TUNING.defaultRampSec)) ** 2,
   );
 
-  // Fish AI: start/continue/end runs.
+  // Fish AI: start/continue/end runs (sets fishDirTarget; fishDir eases there).
   if (s.running) {
     s.runTimer -= dt;
     if (s.runTimer <= 0) {
       s.running = false;
-      s.fishDir = 0; // settle toward center between runs
+      s.fishDirTarget = 0; // settle toward center between runs
     }
   } else {
     // More energetic fish run more often; a tired fish rests more.
@@ -265,20 +272,24 @@ export function stepFight(
       s.running = true;
       s.runTimer = 0.5 + rng() * (1.1 / Math.max(0.5, fish.agility / 3));
       const side = rng() < 0.5 ? -1 : 1;
-      s.fishDir = side * (0.55 + rng() * 0.45);
+      s.fishDirTarget = side * (0.55 + rng() * 0.45);
     } else if (rng() < 0.6 * dt) {
       // small idle drift so the target isn't dead-center
-      s.fishDir = (rng() * 2 - 1) * 0.25;
+      s.fishDirTarget = (rng() * 2 - 1) * 0.25;
     }
   }
 
-  // Smooth actual pull direction toward the target at the fish's agility rate.
-  // The ramp throttles both the dart rate AND the swing amplitude, so early-
-  // fight movement is slow and close to center, growing to the full ±1 range.
-  const maxStep = fish.agility * ramp * dt;
-  s.fishDirCurrent += clamp(s.fishDir * ramp - s.fishDirCurrent, -maxStep, maxStep);
+  // Ease the committed direction toward the AI target (no instant side flips).
+  const targetBlend = 1 - Math.exp(-TUNING.dirTargetEase * dt);
+  s.fishDir += (s.fishDirTarget - s.fishDir) * targetBlend;
 
-  // How well the player is countering the lateral pull.
+  // Exponential chase toward fishDir — softer than the old linear agility cap.
+  // The ramp still throttles amplitude so early-fight movement stays gentle.
+  const chaseK = fish.agility * ramp * TUNING.dirChaseScale;
+  const chaseBlend = 1 - Math.exp(-chaseK * dt);
+  s.fishDirCurrent += (s.fishDir * ramp - s.fishDirCurrent) * chaseBlend;
+
+  // How well the player is countering the lateral pull (matches bobber position).
   // Ideal steer is OPPOSITE the fish's direction, so opposition > 0 when
   // countering correctly, < 0 when steering the same way (giving slack).
   const opposition = clamp(-steer * s.fishDirCurrent, -1, 1);

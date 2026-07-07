@@ -32,7 +32,6 @@ export function FishingScene({ store }: { store: FishingStore }) {
   const fishBodyRef = useRef<THREE.Mesh>(null);
   const rippleRef = useRef<THREE.Mesh>(null);
   const waterRef = useRef<THREE.Mesh>(null);
-  const lastColor = useRef("");
 
   // Scratch vectors reused each frame (no per-frame allocation).
   const v = useMemo(() => ({ tip: new THREE.Vector3(), fish: new THREE.Vector3(), col: new THREE.Color() }), []);
@@ -48,15 +47,6 @@ export function FishingScene({ store }: { store: FishingStore }) {
     const active = s.phase === "waiting" || s.phase === "bite" || s.phase === "fighting";
     if (fishRef.current) fishRef.current.visible = active;
     if (lineRef.current) lineRef.current.visible = active;
-
-    // Recolor the marker to the species only once hooked; keep a neutral red
-    // bobber while waiting so the color doesn't spoil what's biting.
-    const reveal = s.phase === "fighting" || s.phase === "bite";
-    const markerColor = reveal ? store.fish.color : "#d4564f";
-    if (fishBodyRef.current && markerColor !== lastColor.current) {
-      lastColor.current = markerColor;
-      (fishBodyRef.current.material as THREE.MeshStandardMaterial).color.set(markerColor);
-    }
 
     // Rod load: bends toward the water as tension rises, tilts with steer.
     if (rodRef.current) {
@@ -244,7 +234,7 @@ export function FishingScene({ store }: { store: FishingStore }) {
 
       {/* Fish marker / bobber + ripple */}
       <group ref={fishRef}>
-        {/* top half: neutral red while waiting, recolored to the species when hooked */}
+        {/* top half: neutral red bobber — species is revealed only after landing */}
         <mesh ref={fishBodyRef} position={[0, 0.08, 0]} castShadow>
           <sphereGeometry args={[0.16, 10, 8]} />
           <meshStandardMaterial color={RED} flatShading roughness={1} />

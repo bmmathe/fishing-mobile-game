@@ -97,7 +97,7 @@ export function FishingHud({
   const isJunk = store.fish.kind === "junk";
   const nibbling = store.nibbling;
   const pending = store.lastCatch;
-  // Don't reveal the species while waiting — only once it's hooked. The catch
+  // Don't reveal the species until the catch modal after landing. The catch
   // modal replaces the center message while it's open. (During the bite phase
   // s.message carries "Fish on! PULL!".)
   const centerMsg = pending
@@ -147,18 +147,6 @@ export function FishingHud({
         <div style={ui.topBars}>
           <Meter label="Reeled in" pct={distancePct} color="#5aa9bd" />
           {!isJunk && <Meter label="Fish stamina" pct={s.stamina * 100} color="#d98a4f" />}
-        </div>
-      )}
-
-      {/* Hooked label */}
-      {fighting && (
-        <div style={ui.fishLabel}>
-          <span style={{ fontWeight: 700 }}>{store.fish.name}</span>
-          {!isJunk && (
-            <span style={{ ...ui.fishTier, color: tierColor(store.fish.tier) }}>
-              T{store.fish.tier} · {TIER_WORDS[store.fish.tier - 1]}
-            </span>
-          )}
         </div>
       )}
 
@@ -736,8 +724,6 @@ const ui: Record<string, CSSProperties> = {
   meterLabel: { fontSize: 11, fontWeight: 600, opacity: 0.8, marginBottom: 3, textShadow: "0 1px 2px rgba(255,255,255,0.6)" },
   meterTrack: { height: 12, borderRadius: 6, background: "rgba(255,255,255,0.45)", overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)" },
   meterFill: { height: "100%", borderRadius: 6, transition: "width 0.08s linear" },
-  fishLabel: { position: "absolute", top: 52, left: 0, right: 0, textAlign: "center", fontSize: 15, textShadow: "0 1px 2px rgba(255,255,255,0.6)", display: "flex", gap: 8, justifyContent: "center", alignItems: "baseline" },
-  fishTier: { fontSize: 11, fontWeight: 700 },
   tensionWrap: { position: "absolute", right: 18, top: "28%", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 },
   tensionLabel: { fontSize: 10, fontWeight: 700, letterSpacing: 1, opacity: 0.8 },
   tensionTrack: { position: "relative", width: 22, height: 180, borderRadius: 11, background: "rgba(255,255,255,0.45)", overflow: "hidden", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column-reverse" },
