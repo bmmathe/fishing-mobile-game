@@ -51,7 +51,7 @@ src/
     FishingGame.tsx   composes Canvas + HUD
   game/               progression (economy + gear + boats + bait)
     gear.ts           line/pole/boat tiers, fishValue(), fishFee()
-    bait.ts           bait defs (Worms + forage); tierBoost / waitFactor per bait
+    bait.ts           bait defs (Worms + forage); hook tables / waitFactor per bait
     hooks.ts          specialty hook tackle; tier-specific holdBonus
     playerStore.ts    currency, cooler, bait/hook box, gear/boat, trophies, fishdex; persisted
     TackleShop.tsx    Cooler (sell / →Bait / 🏆Mount) / Bait / Gear tabs
@@ -79,7 +79,7 @@ Desktop testing: `Enter` casts, `↓`/`Space` reels, `←`/`→` steer.
 
 ## Fish tiers (8) — `src/fishing/fishCatalog.ts`
 
-Full roster, params, and bait/gear gating: **[docs/fish_tiers.md](docs/fish_tiers.md)**.
+Full roster and fight params: **[docs/fish_tiers.md](docs/fish_tiers.md)**. Bait hook tables and chains: **[docs/bait.md](docs/bait.md)**.
 
 Tiers are **difficulty bands**, orthogonal to **water** (fresh/salt) and
 **location**. Each tier targets a skilled catch-rate on the _starter_ line:
@@ -244,11 +244,10 @@ npm run sim:boat   # boat tiers, fee table, fee-vs-catch-value sanity
 Caught fish go into a **limited cooler** (`COOLER_CAP`); from the shop you move a
 forage fish into the **bait box** (or buy standard **Worms**). Bait is sellable
 too. In the fishing cast panel you **equip a bait**: each bite consumes one and
-applies the bait's two independent levers — **`tierBoost`** (weights the spot's
-roll toward the bait's `forTiers` → more higher-tier bites) and **`waitFactor`**
-(shortens the wait). A bait can be tier-only (e.g. Menhaden), wait-only (Golden
-Shiner), or both; premium bait (Cisco, etc.) is catch-only, Worms are buyable
-(PRD). Bait does **not** ease reeling — that's gear. Persisted; verified by:
+replaces the spot's tier roll with the bait's **hook table** (see
+**[docs/bait.md](docs/bait.md)**) and may shorten wait (`waitFactor`). Premium
+bait (Cisco, etc.) is catch-only; Worms are buyable (PRD). Bait does **not**
+ease reeling — that's gear. Persisted; verified by:
 
 ```bash
 npm run sim:bait   # bait effects + tier-distribution/wait shift with vs without bait

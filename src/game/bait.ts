@@ -16,7 +16,7 @@ import type { TierWeight } from "../world/regions";
 export interface BaitDef {
   id: string;
   name: string;
-  grade: number; // 0 = worms, 1-3 = forage grades from the catalog
+  grade: number; // 0 = shop-bought (worms/lures), 1-3 = forage grades from the catalog
   /** The bait's tier — drives the hook table below. */
   tier: number;
   /** Tiers this bait is sold as luring (display; tier is derived from these). */
@@ -25,6 +25,14 @@ export interface BaitDef {
   waitFactor: number;
   buyable?: boolean;
   price?: number;
+  /**
+   * Synthetic lures aren't eaten per bite like live bait. Instead each LANDED
+   * fight wears the lure out with probability 1/uses (a soft "number of uses"),
+   * and a LOST fish takes the lure with it — that loss risk is why lures can't
+   * be priced anywhere near `uses × fish value`.
+   */
+  synthetic?: boolean;
+  uses?: number;
 }
 
 /**
@@ -82,6 +90,43 @@ export const WORMS: BaitDef = {
   buyable: true,
   price: 5,
 };
+
+/**
+ * Synthetic lures — shop-bought bait for the tiers no forage fish covers
+ * (T5/T6; the T7-8 premium bait stays catch-only per the PRD, feeding the
+ * future player auction). Works in both waters. Priced against the loss rule:
+ * with a mid-tier land rate around 50%, a lure survives ~2 fights on average,
+ * so the sticker must stay well under two fish worth of value.
+ */
+export const SYNTHETIC_LURES: BaitDef[] = [
+  {
+    id: "spinner-lure",
+    name: "Spinner Lure",
+    grade: 0,
+    tier: 5,
+    forTiers: [3, 4, 5],
+    waitFactor: 0.95,
+    buyable: true,
+    price: 90,
+    synthetic: true,
+    uses: 8,
+  },
+  {
+    id: "deep-diver",
+    name: "Deep Diver Lure",
+    grade: 0,
+    tier: 6,
+    forTiers: [4, 5, 6],
+    waitFactor: 1,
+    buyable: true,
+    price: 140,
+    synthetic: true,
+    uses: 6,
+  },
+];
+
+/** Everything the NPC shop sells (worms + synthetic lures). */
+export const BUYABLE_BAIT: BaitDef[] = [WORMS, ...SYNTHETIC_LURES];
 
 /** Default wait effect by forage grade. */
 const BY_GRADE: Record<number, { waitFactor: number }> = {

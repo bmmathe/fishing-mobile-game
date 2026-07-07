@@ -11,8 +11,9 @@
  *  - weight for tiers a spot lacks falls to the lowest shared tier; a bait
  *    with no shared tiers does nothing (natural pool)
  */
-import { baitTierWeights, baitFromFish, WORMS } from "../src/game/bait.ts";
+import { baitTierWeights, baitFromFish, SYNTHETIC_LURES, WORMS } from "../src/game/bait.ts";
 import { BAITED_JUNK_WEIGHT, JUNK_WEIGHT, randomFishFromPool } from "../src/fishing/fishCatalog.ts";
+import { fishValue } from "../src/game/gear.ts";
 import { pickTier, REGIONS, type Spot } from "../src/world/regions.ts";
 
 // mulberry32 — clean serial behavior for back-to-back rolls (tier → species).
@@ -69,8 +70,11 @@ const menhaden = baitFromFish("Menhaden", 2, [3, 4, 5]); // T4
 const cisco = baitFromFish("Cisco", 3, [6, 7, 8]); // T7
 const goggle = baitFromFish("Goggle-eye", 3, [7, 8]); // T8
 
+const [spinner, diver] = SYNTHETIC_LURES; // T5, T6 — fill the forage gap
+
 console.log("=== Derived bait tiers ===");
-for (const b of [worms, minnow, shad, menhaden, cisco, goggle]) console.log(`${b.name.padEnd(16)} T${b.tier}`);
+for (const b of [worms, minnow, shad, menhaden, spinner, diver, cisco, goggle])
+  console.log(`${b.name.padEnd(16)} T${b.tier}${b.synthetic ? `  (synthetic · $${b.price} · ~${b.uses} uses)` : ""}`);
 
 const stream = spotOf("stream"); // T1-2
 const beach = spotOf("beach"); // T1-2-3
@@ -86,6 +90,8 @@ const rows: [string, Spot, number | null][] = [
   ["beach + minnow (T3)", beach, minnow.tier],
   ["dock + shad (T4)", dock, shad.tier],
   ["dock + menhaden (T4)", dock, menhaden.tier],
+  ["dock + Spinner Lure (T5)", dock, spinner.tier],
+  ["deep-lake + Deep Diver (T6)", spotOf("deep-lake"), diver.tier],
   ["offshore + cisco (T7)", offshore, cisco.tier],
   ["offshore + goggle-eye (T8)", offshore, goggle.tier],
   ["offshore + worms (inert)", offshore, worms.tier],
@@ -126,9 +132,35 @@ const checks: [string, boolean, string][] = [
     fmt(g("offshore + goggle-eye (T8)")),
   ],
   [
+    "T5 lure @dock = 20/30/50 T3/T4/T5",
+    near(g("dock + Spinner Lure (T5)").tierPct[5] ?? 0, 50) && near(g("dock + Spinner Lure (T5)").tierPct[3] ?? 0, 20),
+    fmt(g("dock + Spinner Lure (T5)")),
+  ],
+  [
+    "T6 lure @deep-lake = 100% T6 (below-tiers absent)",
+    near(g("deep-lake + Deep Diver (T6)").tierPct[6] ?? 0, 100),
+    fmt(g("deep-lake + Deep Diver (T6)")),
+  ],
+  [
     "inert bait (no shared tiers) = natural pool (T6 ≈ 55%)",
     near(g("offshore + worms (inert)").tierPct[6] ?? 0, 55, 3),
     fmt(g("offshore + worms (inert)")),
   ],
 ];
 for (const [label, ok, got] of checks) console.log(`${ok ? "PASS" : "TUNE"}  ${label} — got ${got}`);
+
+// --- Lure economics: expected net per lure, given the loss-on-escape rule ---
+// Bites per lure = 1 / (landRate/uses + (1-landRate)); landed value uses the
+// lure's same-tier share as a floor estimate of what it hooks.
+console.log("\n=== Lure break-even (INFO) ===");
+for (const lure of SYNTHETIC_LURES) {
+  const sameVal = fishValue(lure.tier, 10); // representative weight
+  for (const landRate of [0.4, 0.7, 0.9]) {
+    const bites = 1 / (landRate / (lure.uses ?? 1) + (1 - landRate));
+    const landedValue = bites * landRate * sameVal * 0.7; // ~70% of bites near the lure's tier
+    console.log(
+      `${lure.name.padEnd(16)} land ${(landRate * 100).toFixed(0)}%: ~${bites.toFixed(1)} bites/lure, ` +
+        `≈$${landedValue.toFixed(0)} landed vs $${lure.price} cost → ${landedValue > (lure.price ?? 0) ? "profitable" : "LOSS"}`,
+    );
+  }
+}

@@ -57,8 +57,12 @@ export class FishingStore {
   /** Equipped-bait effect (set by App), and stock hooks into the player store. */
   baitTier: number | null = null;
   baitWaitFactor = 1;
+  /** Synthetic lure's soft use count (null = live bait, eaten per bite). */
+  baitLureUses: number | null = null;
   hasBait?: () => boolean;
   consumeBait?: () => void;
+  /** A synthetic lure is on the hooked fish — resolved when the fight ends. */
+  private lurePending = false;
 
   /** Equipped hook effect (set by App); stock checked via hasHook. */
   hookEffect: HookDef | null = null;
@@ -182,9 +186,10 @@ export class FishingStore {
   }
 
   /** Set the equipped bait's effect (null = no bait). Stock is checked via hasBait. */
-  setBait(effect: { tier: number; waitFactor: number } | null) {
+  setBait(effect: { tier: number; waitFactor: number; lureUses?: number } | null) {
     this.baitTier = effect ? effect.tier : null;
     this.baitWaitFactor = effect ? effect.waitFactor : 1;
+    this.baitLureUses = effect?.lureUses ?? null;
     this.notify();
   }
 
@@ -287,8 +292,11 @@ export class FishingStore {
     const wait = rollWaitTime(this.currentHole) * (baited ? this.baitWaitFactor : 1);
     this.state = startCast(this._fish, wait);
     sfx.cast();
-    // One bait per bite — only a real fish (not junk) consumes it.
-    if (baited && this._fish.kind !== "junk") this.consumeBait?.();
+    // Live bait is eaten by the bite — only a real fish (not junk) consumes it.
+    // Synthetic lures aren't eaten; they resolve when a hooked fight ends
+    // (soft wear on a landing, gone outright with a lost fish).
+    this.lurePending = false;
+    if (baited && this._fish.kind !== "junk" && this.baitLureUses === null) this.consumeBait?.();
     this.releaseInput();
     this.notify();
   }
@@ -315,7 +323,16 @@ export class FishingStore {
     // --- sound: phase / event edges ---
     const s = this.state;
     if (s.phase === "bite" && prevPhase === "waiting") sfx.bite();
-    if (s.phase === "fighting" && prevPhase !== "fighting") sfx.hookset();
+    if (s.phase === "fighting" && prevPhase !== "fighting") {
+      sfx.hookset();
+      // Arm the synthetic lure: it's now on a hooked fish. (A missed bite
+      // never arms it — the fish spat the lure, no loss.)
+      this.lurePending =
+        this.baitLureUses !== null &&
+        this.baitTier !== null &&
+        (this.hasBait?.() ?? false) &&
+        this._fish.kind !== "junk";
+    }
     // Blown cast (pulled too soon / missed the bite window) → gentle fail cue.
     if (s.phase === "idle" && (prevPhase === "waiting" || prevPhase === "bite")) sfx.lost();
     const nib = this.nibbling;
@@ -335,6 +352,11 @@ export class FishingStore {
     if (this.state.phase === "lost" && prevPhase !== "lost") {
       if (this.state.message.startsWith("SNAP!")) sfx.snap();
       else sfx.lost();
+      // A lost fish takes the synthetic lure with it.
+      if (this.lurePending) {
+        this.consumeBait?.();
+        this.lurePending = false;
+      }
     }
 
     // On a fresh landing, stage the catch for the reveal modal. Banking waits
@@ -360,6 +382,11 @@ export class FishingStore {
         // The first landing (not keep) locks the spot for re-entry — the
         // session continues, but you can't come back until the lock expires.
         if (this.currentSpot) this.onLanded?.(this.currentSpot);
+        // Soft wear on the synthetic lure: ~1-in-uses landings retires it.
+        if (this.lurePending) {
+          if (Math.random() < 1 / (this.baitLureUses ?? 1)) this.consumeBait?.();
+          this.lurePending = false;
+        }
       }
     }
 

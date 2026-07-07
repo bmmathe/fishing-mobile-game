@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore, type CSSProperties } from "react";
 import { BOAT_TIERS, LINE_TIERS, POLE_TIERS } from "./gear";
-import { WORMS } from "./bait";
+import { BUYABLE_BAIT, SYNTHETIC_LURES } from "./bait";
 import { HOOKS } from "./hooks";
 import { CatchArt } from "../fishing/CatchArt";
 import { sfx } from "../audio/sfx";
@@ -98,15 +98,25 @@ function BaitTab({ store }: { store: PlayerStore }) {
   const stacks = Object.values(store.baitBox);
   return (
     <>
-      <button
-        style={{ ...ui.sellAll, background: "#5aa9bd" }}
-        onClick={() => {
-          if (store.buyWorms(5)) sfx.buy();
-          else sfx.denied();
-        }}
-      >
-        Buy 5 Worms (−${(WORMS.price ?? 0) * 5})
-      </button>
+      {BUYABLE_BAIT.map((def) => {
+        const qty = def.synthetic ? 1 : 5;
+        return (
+          <button
+            key={def.id}
+            style={{ ...ui.sellAll, background: def.synthetic ? "#c98a5a" : "#5aa9bd" }}
+            onClick={() => {
+              if (store.buyBait(def.id, qty)) sfx.buy();
+              else sfx.denied();
+            }}
+          >
+            Buy {qty > 1 ? `${qty} ` : ""}{def.name} (−${(def.price ?? 0) * qty})
+            {def.synthetic ? ` · T${def.tier} · ~${def.uses} uses` : ""}
+          </button>
+        );
+      })}
+      {SYNTHETIC_LURES.length > 0 && (
+        <div style={ui.lureWarn}>⚠ Lures wear out — and a fish that gets away takes the lure with it.</div>
+      )}
       {stacks.length === 0 ? (
         <div style={ui.empty}>No bait yet. Catch forage fish and tap "→ Bait", or buy Worms.</div>
       ) : (
@@ -120,6 +130,7 @@ function BaitTab({ store }: { store: PlayerStore }) {
                 <div style={ui.sub}>
                   T{def.tier} bait — hooks mostly T{def.tier}
                   {def.waitFactor < 1 ? ` · ↓wait ×${def.waitFactor}` : ""}
+                  {def.synthetic ? ` · ~${def.uses} uses, lost if the fish escapes` : ""}
                 </div>
               </div>
               <button style={ui.sellOne} onClick={() => { sfx.coin(); store.sellBait(def.id, 1); }}>
@@ -277,6 +288,7 @@ const ui: Record<string, CSSProperties> = {
   body: { flex: 1, overflowY: "auto", minHeight: 0 },
   empty: { textAlign: "center", opacity: 0.7, marginTop: 40, fontSize: 15 },
   sellAll: { width: "100%", border: "none", borderRadius: 16, padding: "13px", fontSize: 16, fontWeight: 700, color: "#fff", background: "#3f9e6a", cursor: "pointer", marginBottom: 12 },
+  lureWarn: { fontSize: 12, fontWeight: 600, opacity: 0.8, textAlign: "center", marginBottom: 12 },
   list: { display: "flex", flexDirection: "column", gap: 8 },
   row: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(255,255,255,0.7)", borderRadius: 12, padding: "8px 14px" },
   thumb: { flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 38, background: "#dceef0", borderRadius: 10, overflow: "hidden" },

@@ -1,5 +1,5 @@
 import { BOAT_TIERS, fishValue, LINE_TIERS, POLE_TIERS } from "./gear";
-import { baitFromFish, WORMS, type BaitDef } from "./bait";
+import { baitFromFish, BUYABLE_BAIT, WORMS, type BaitDef } from "./bait";
 import { getHook, HOOKS, STARTER_HOOK_COUNT, STARTER_HOOK_ID, type HookDef } from "./hooks";
 import { coolerCooldownMs, spotLockMs } from "./spotRest";
 import type { Spot } from "../world/regions";
@@ -265,15 +265,22 @@ export class PlayerStore {
     this.changed();
   }
 
-  buyWorms(qty = 1): boolean {
-    const cost = (WORMS.price ?? 0) * qty;
+  /** Buy any shop bait (worms / synthetic lures) by id. */
+  buyBait(id: string, qty = 1): boolean {
+    const def = BUYABLE_BAIT.find((b) => b.id === id);
+    if (!def || qty < 1) return false;
+    const cost = (def.price ?? 0) * qty;
     if (this.currency < cost) return false;
     this.currency -= cost;
-    const stack = this.baitBox[WORMS.id];
+    const stack = this.baitBox[def.id];
     if (stack) stack.count += qty;
-    else this.baitBox[WORMS.id] = { def: WORMS, count: qty };
+    else this.baitBox[def.id] = { def, count: qty };
     this.changed();
     return true;
+  }
+
+  buyWorms(qty = 1): boolean {
+    return this.buyBait(WORMS.id, qty);
   }
 
   /** Sell value of a bait unit (forage sells modestly; worms by their price). */
@@ -304,9 +311,10 @@ export class PlayerStore {
   }
 
   /** Effect of the equipped bait for the fight (null if none). */
-  get baitEffect(): { tier: number; waitFactor: number } | null {
+  get baitEffect(): { tier: number; waitFactor: number; lureUses?: number } | null {
     const s = this.equippedBait;
-    return s ? { tier: s.def.tier, waitFactor: s.def.waitFactor } : null;
+    if (!s) return null;
+    return { tier: s.def.tier, waitFactor: s.def.waitFactor, lureUses: s.def.synthetic ? s.def.uses : undefined };
   }
 
   /** True if the equipped bait has stock (peek; doesn't consume). */
