@@ -291,16 +291,23 @@ export function poolFor(tier: number, water: Water, access?: Access): FishDef[] 
  */
 export const JUNK_WEIGHT = 0.35;
 
+/**
+ * Junk weight while fishing WITH bait: real bait cuts a T1 roll's junk share
+ * to ~10% (4 junk × 1/12 vs 3 fish → 1 bite in 10 is garbage).
+ */
+export const BAITED_JUNK_WEIGHT = 1 / 12;
+
 /** Pick a random entry from a tier/water pool — mimics a location's pool. */
 export function randomFishFromPool(
   tier: number,
   water: Water,
   rng: () => number = Math.random,
   access?: Access,
+  junkWeight: number = JUNK_WEIGHT,
 ): FishDef {
   const pool = poolFor(tier, water, access);
   if (pool.length === 0) return FISH[0];
-  const weight = (f: FishDef) => (f.kind === "junk" ? JUNK_WEIGHT : 1);
+  const weight = (f: FishDef) => (f.kind === "junk" ? junkWeight : 1);
   let r = rng() * pool.reduce((sum, f) => sum + weight(f), 0);
   for (const f of pool) {
     r -= weight(f);

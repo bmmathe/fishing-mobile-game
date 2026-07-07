@@ -9,6 +9,7 @@ import {
   type LineSpec,
 } from "./fishingModel";
 import {
+  BAITED_JUNK_WEIGHT,
   getFishByName,
   getTier,
   poolFor,
@@ -17,6 +18,7 @@ import {
   type FishDef,
   type Water,
 } from "./fishCatalog";
+import { baitTierWeights } from "../game/bait";
 import { DEFAULT_HOLE, QUALITY_CURVES, rollWaitTime, type FishingHole } from "./fishingHoles";
 import { pickTier, type Spot } from "../world/regions";
 import { effectiveHookHold, type HookDef } from "../game/hooks";
@@ -53,8 +55,7 @@ export class FishingStore {
   }) => void;
 
   /** Equipped-bait effect (set by App), and stock hooks into the player store. */
-  baitForTiers: number[] | null = null;
-  baitTierBoost = 1;
+  baitTier: number | null = null;
   baitWaitFactor = 1;
   hasBait?: () => boolean;
   consumeBait?: () => void;
@@ -181,9 +182,8 @@ export class FishingStore {
   }
 
   /** Set the equipped bait's effect (null = no bait). Stock is checked via hasBait. */
-  setBait(effect: { forTiers: number[]; tierBoost: number; waitFactor: number } | null) {
-    this.baitForTiers = effect ? effect.forTiers : null;
-    this.baitTierBoost = effect ? effect.tierBoost : 1;
+  setBait(effect: { tier: number; waitFactor: number } | null) {
+    this.baitTier = effect ? effect.tier : null;
     this.baitWaitFactor = effect ? effect.waitFactor : 1;
     this.notify();
   }
@@ -260,8 +260,9 @@ export class FishingStore {
   private beginCast() {
     // A random catch from the spot's pool (or the dev tier/water selection),
     // with the wait-to-bite rolled from the hole's quality curve. Equipped bait
-    // (if in stock) biases the tier roll up and shortens the wait.
-    const baited = !!this.baitForTiers && (this.hasBait?.() ?? false);
+    // (if in stock) replaces the tier roll with its bait-tier hook table and
+    // slashes the junk share of any T1 roll.
+    const baited = this.baitTier !== null && (this.hasBait?.() ?? false);
     const spot = this.currentSpot;
     if (spot) {
       // Mythic roll first: the spot's storied one can steal the hook outright.
@@ -269,8 +270,16 @@ export class FishingStore {
       if (myth && Math.random() < spot.mythic!.chance) {
         this._fish = this.withHookHold(myth);
       } else {
-        const tiers = baited ? this.boostTiers(spot.tiers) : spot.tiers;
-        this._fish = this.withHookHold(randomFishFromPool(pickTier(tiers), spot.water, Math.random, spot.access));
+        const tiers = (baited ? baitTierWeights(this.baitTier!, spot.tiers) : null) ?? spot.tiers;
+        this._fish = this.withHookHold(
+          randomFishFromPool(
+            pickTier(tiers),
+            spot.water,
+            Math.random,
+            spot.access,
+            baited ? BAITED_JUNK_WEIGHT : undefined,
+          ),
+        );
       }
     } else {
       this._fish = this.withHookHold(randomFishFromPool(this.selectedTier, this.selectedWater, Math.random, "land"));
@@ -282,12 +291,6 @@ export class FishingStore {
     if (baited && this._fish.kind !== "junk") this.consumeBait?.();
     this.releaseInput();
     this.notify();
-  }
-
-  /** Scale the weights of the bait's target tiers within a spot's pool. */
-  private boostTiers(tiers: { tier: number; weight: number }[]) {
-    const set = new Set(this.baitForTiers);
-    return tiers.map((t) => (set.has(t.tier) ? { tier: t.tier, weight: t.weight * this.baitTierBoost } : t));
   }
 
   reset() {

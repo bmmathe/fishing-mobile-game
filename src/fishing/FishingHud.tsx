@@ -514,7 +514,7 @@ function CatchModal({
         )}
         {c.bait && !c.isJunk && (
           <div style={ui.catchBaitHint}>
-            🪱 Keeps as bait — lures T{Math.min(...c.bait.forTiers)}–T{Math.max(...c.bait.forTiers)}
+            🪱 Keeps as T{Math.round(c.bait.forTiers.reduce((a, b) => a + b, 0) / c.bait.forTiers.length)} bait
           </div>
         )}
         {fullRelease && (

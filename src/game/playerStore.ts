@@ -304,9 +304,9 @@ export class PlayerStore {
   }
 
   /** Effect of the equipped bait for the fight (null if none). */
-  get baitEffect(): { forTiers: number[]; tierBoost: number; waitFactor: number } | null {
+  get baitEffect(): { tier: number; waitFactor: number } | null {
     const s = this.equippedBait;
-    return s ? { forTiers: s.def.forTiers, tierBoost: s.def.tierBoost, waitFactor: s.def.waitFactor } : null;
+    return s ? { tier: s.def.tier, waitFactor: s.def.waitFactor } : null;
   }
 
   /** True if the equipped bait has stock (peek; doesn't consume). */

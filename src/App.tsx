@@ -111,8 +111,7 @@ export default function App() {
       id: s.def.id,
       name: s.def.name,
       count: s.count,
-      hint: `lures T${Math.min(...s.def.forTiers)}–T${Math.max(...s.def.forTiers)}` +
-        (s.def.tierBoost > 1 ? ` · ↑tier` : "") + (s.def.waitFactor < 1 ? ` · ↓wait` : ""),
+      hint: `T${s.def.tier} bait — hooks mostly T${s.def.tier}` + (s.def.waitFactor < 1 ? ` · ↓wait` : ""),
     })),
     equippedId: player.equippedBaitId,
     onEquip: (id: string | null) => player.equipBait(id),

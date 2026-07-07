@@ -118,8 +118,7 @@ function BaitTab({ store }: { store: PlayerStore }) {
                   {def.name} ×{count}
                 </div>
                 <div style={ui.sub}>
-                  lures T{Math.min(...def.forTiers)}–T{Math.max(...def.forTiers)}
-                  {def.tierBoost > 1 ? ` · ↑tier ×${def.tierBoost}` : ""}
+                  T{def.tier} bait — hooks mostly T{def.tier}
                   {def.waitFactor < 1 ? ` · ↓wait ×${def.waitFactor}` : ""}
                 </div>
               </div>
