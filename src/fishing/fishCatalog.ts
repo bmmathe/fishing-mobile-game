@@ -86,18 +86,21 @@ export function isMythic(fish: { tier: number }): boolean {
  * (high `strength`). The two mechanics together produce a smooth catch-rate
  * curve without making small fish absurdly strong.
  */
+// rampSec = seconds for lateral movement to reach full pace after the ~1s
+// reaction grace (fishingModel TUNING.rampDelay/rampFloor): long, gentle
+// openings on the small fish, near-instant ferocity at the top.
 const BAND: Record<number, Omit<FishSpec, "name">> = {
-  1: { strength: 0.3, runStrength: 1.2, runChance: 0.45, agility: 2.2, startDistance: 11, hookHold: 0.26 },
-  2: { strength: 0.42, runStrength: 1.35, runChance: 0.52, agility: 2.7, startDistance: 15, hookHold: 0.16 },
-  3: { strength: 0.7, runStrength: 1.55, runChance: 0.62, agility: 3.1, startDistance: 19, hookHold: 0.35 },
-  4: { strength: 0.76, runStrength: 1.7, runChance: 0.7, agility: 3.6, startDistance: 23, hookHold: 0.82 },
-  5: { strength: 0.9, runStrength: 1.85, runChance: 0.76, agility: 4.1, startDistance: 27, hookHold: 0.95 },
-  6: { strength: 1.05, runStrength: 2.0, runChance: 0.8, agility: 4.5, startDistance: 32, hookHold: 0.98 },
-  7: { strength: 1.25, runStrength: 2.2, runChance: 0.84, agility: 5.0, startDistance: 38, hookHold: 0.99 },
-  8: { strength: 1.5, runStrength: 2.4, runChance: 0.88, agility: 5.5, startDistance: 45, hookHold: 0.99 },
+  1: { strength: 0.3, runStrength: 1.2, runChance: 0.45, agility: 2.2, startDistance: 11, hookHold: 0.26, rampSec: 7 },
+  2: { strength: 0.42, runStrength: 1.35, runChance: 0.52, agility: 2.7, startDistance: 15, hookHold: 0.16, rampSec: 5.5 },
+  3: { strength: 0.7, runStrength: 1.55, runChance: 0.62, agility: 3.1, startDistance: 19, hookHold: 0.35, rampSec: 4 },
+  4: { strength: 0.76, runStrength: 1.7, runChance: 0.7, agility: 3.6, startDistance: 23, hookHold: 0.82, rampSec: 3 },
+  5: { strength: 0.9, runStrength: 1.85, runChance: 0.76, agility: 4.1, startDistance: 27, hookHold: 0.95, rampSec: 2.2 },
+  6: { strength: 1.05, runStrength: 2.0, runChance: 0.8, agility: 4.5, startDistance: 32, hookHold: 0.98, rampSec: 1.7 },
+  7: { strength: 1.25, runStrength: 2.2, runChance: 0.84, agility: 5.0, startDistance: 38, hookHold: 0.99, rampSec: 1.3 },
+  8: { strength: 1.5, runStrength: 2.4, runChance: 0.88, agility: 5.5, startDistance: 45, hookHold: 0.99, rampSec: 1 },
   // T9 defaults are the ENDGAME mythics: balanced against the best line/pole
   // (see scripts/mythicsim.ts). The starter mythic overrides these way down.
-  9: { strength: 2.0, runStrength: 2.7, runChance: 0.94, agility: 6.2, startDistance: 62, hookHold: 1 },
+  9: { strength: 2.0, runStrength: 2.7, runChance: 0.94, agility: 6.2, startDistance: 62, hookHold: 1, rampSec: 0.8 },
 };
 
 /** Build a fish from its tier band + per-species overrides. */
@@ -280,6 +283,14 @@ export function poolFor(tier: number, water: Water, access?: Access): FishDef[] 
   );
 }
 
+/**
+ * How often junk takes the hook relative to a fish in the same pool. The T1
+ * pools carry 4 junk vs 3 fish species, so an even roll made the starter
+ * waters >half garbage — with this weight a T1 bite is ~2/3 fish while junk
+ * stays common enough to keep its gag value. Tuned via `npm run sim:junk`.
+ */
+export const JUNK_WEIGHT = 0.35;
+
 /** Pick a random entry from a tier/water pool — mimics a location's pool. */
 export function randomFishFromPool(
   tier: number,
@@ -288,7 +299,14 @@ export function randomFishFromPool(
   access?: Access,
 ): FishDef {
   const pool = poolFor(tier, water, access);
-  return pool[Math.floor(rng() * pool.length)] ?? FISH[0];
+  if (pool.length === 0) return FISH[0];
+  const weight = (f: FishDef) => (f.kind === "junk" ? JUNK_WEIGHT : 1);
+  let r = rng() * pool.reduce((sum, f) => sum + weight(f), 0);
+  for (const f of pool) {
+    r -= weight(f);
+    if (r <= 0) return f;
+  }
+  return pool[pool.length - 1];
 }
 
 /** A rolled flavor weight for a landed catch. */

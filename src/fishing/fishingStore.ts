@@ -313,6 +313,8 @@ export class FishingStore {
     const s = this.state;
     if (s.phase === "bite" && prevPhase === "waiting") sfx.bite();
     if (s.phase === "fighting" && prevPhase !== "fighting") sfx.hookset();
+    // Blown cast (pulled too soon / missed the bite window) → gentle fail cue.
+    if (s.phase === "idle" && (prevPhase === "waiting" || prevPhase === "bite")) sfx.lost();
     const nib = this.nibbling;
     if (nib && !this.wasNibbling) sfx.nibble();
     this.wasNibbling = nib;

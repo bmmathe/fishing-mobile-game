@@ -69,7 +69,9 @@ export function FishingHud({
       if (["ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
         e.preventDefault();
         down.add(e.key);
-        store.tapHook();
+        // Only the reel keys pull — a stray steer press while the bobber is
+        // out shouldn't scare the fish off.
+        if (e.key === "ArrowDown" || e.key === " ") store.tapHook();
         apply();
       } else if (e.key === "Enter") {
         store.cast();
@@ -87,17 +89,20 @@ export function FishingHud({
     };
   }, [store]);
 
-  const fighting = s.phase === "fighting" || s.phase === "bite";
-  const waiting = s.phase === "waiting";
+  // The bite keeps the wait panel (and its PULL button) up — the bobber is the
+  // tell, not a panel switch. Fight UI appears only once the hook is set.
+  const fighting = s.phase === "fighting";
+  const waiting = s.phase === "waiting" || s.phase === "bite";
   const showCast = s.phase === "idle" || s.phase === "landed" || s.phase === "lost";
   const isJunk = store.fish.kind === "junk";
   const nibbling = store.nibbling;
   const pending = store.lastCatch;
   // Don't reveal the species while waiting — only once it's hooked. The catch
-  // modal replaces the center message while it's open.
+  // modal replaces the center message while it's open. (During the bite phase
+  // s.message carries "Fish on! PULL!".)
   const centerMsg = pending
     ? null
-    : waiting
+    : s.phase === "waiting"
       ? (nibbling ? "Something's nibbling…" : "Waiting for a bite…")
       : s.message;
 
@@ -226,8 +231,8 @@ const TUT_ORDER: TutStep[] = ["cast", "wait", "hook", "reel", "steer", "tension"
 
 const TUT_TEXT: Record<Exclude<TutStep, "hidden">, string> = {
   cast: "Tap the Cast button to throw your line.",
-  wait: "Now we wait. Watch the bobber — a twitch means a nibble. When it dips hard, that's a BITE!",
-  hook: "BITE! Quick — press the control stick to set the hook!",
+  wait: "Now we wait. Watch the bobber — a twitch is just a nibble. Only PULL when it dips hard under!",
+  hook: "BITE! Quick — tap PULL to set the hook!",
   reel: "You're hooked up! Drag the stick DOWN to reel the fish in.",
   steer: "The fish pulls side to side. Steer the stick LEFT/RIGHT toward the fish to ease the strain.",
   tension: "Watch the TENSION bar on the right. In the red the line can SNAP — stop reeling for a moment and let it drop.",
@@ -285,14 +290,15 @@ function TutorialCoach({ store }: { store: FishingStore }) {
       case "wait":
         if (phase === "bite") go("hook");
         else if (phase === "fighting") go("reel");
-        else if (phase === "idle") go("cast");
+        // Only an early PULL ends a waiting cast → coach the timing.
+        else if (phase === "idle") go("cast", "Too soon! Wait for the bobber to dip hard, THEN pull.");
         break;
       case "hook":
         if (phase === "fighting") {
           reelMs.current = 0;
           go("reel");
-        } else if (phase === "waiting") go("wait", "Too slow — it spat the hook. Wait for the next bite.");
-        else if (phase === "idle" || phase === "landed") phase === "landed" ? landed() : go("cast");
+        } else if (phase === "idle") go("cast", "Too slow — it spat the hook. Cast again!");
+        else if (phase === "landed") landed();
         break;
       case "reel":
         if (phase === "landed") landed();
@@ -370,7 +376,11 @@ const QUALITY_COLORS: Record<string, string> = {
   D: "#7d8a82",
 };
 
-/** Waiting screen: which hole you're at + a Recast escape hatch. */
+/**
+ * Waiting/bite screen: which hole you're at + the PULL button. Pull during the
+ * bite window sets the hook; pull too early (or miss the window) and the cast
+ * is over — watch the bobber.
+ */
 function WaitPanel({ store }: { store: FishingStore }) {
   useSyncExternalStore(store.subscribe, store.getVersion);
   const hole = store.currentHole;
@@ -380,9 +390,10 @@ function WaitPanel({ store }: { store: FishingStore }) {
         <span style={{ ...ui.qualityBadge, background: QUALITY_COLORS[hole.quality] }}>{hole.quality}</span>
         <span style={{ fontWeight: 700 }}>{hole.name}</span>
       </div>
-      <button style={ui.recastBtn} onClick={() => store.recast()}>
-        Reel in &amp; recast
+      <button style={ui.pullBtn} onClick={() => store.tapHook()}>
+        PULL!
       </button>
+      <div style={ui.pullHint}>Pull when the bobber dips under — too early scares it off</div>
     </div>
   );
 }
@@ -740,7 +751,8 @@ const ui: Record<string, CSSProperties> = {
   waitPanel: { pointerEvents: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.42)", borderRadius: 20, padding: "12px 18px", backdropFilter: "blur(4px)", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" },
   holeRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 15 },
   qualityBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, color: "#fff", fontWeight: 800, fontSize: 13 },
-  recastBtn: { pointerEvents: "auto", border: "none", borderRadius: 20, padding: "9px 26px", fontSize: 14, fontWeight: 700, color: "#3c5a57", background: "rgba(255,255,255,0.85)", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", cursor: "pointer" },
+  pullBtn: { pointerEvents: "auto", border: "none", borderRadius: 26, padding: "16px 54px", fontSize: 20, fontWeight: 800, letterSpacing: 1, color: "#fff", background: "#d98a4f", boxShadow: "0 4px 14px rgba(0,0,0,0.25)", cursor: "pointer" },
+  pullHint: { fontSize: 11, fontWeight: 600, opacity: 0.75, maxWidth: 240, textAlign: "center" },
   castPanel: { pointerEvents: "auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.42)", borderRadius: 20, padding: "12px 16px", backdropFilter: "blur(4px)", boxShadow: "0 4px 16px rgba(0,0,0,0.12)" },
   baitRow: { display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", maxWidth: 300 },
   baitChip: { border: "none", borderRadius: 12, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "#3c5a57", background: "rgba(255,255,255,0.7)", cursor: "pointer" },

@@ -141,7 +141,9 @@ function tw(pairs: [number, number][]): TierWeight[] {
 
 /** Per-waterbody defaults: water, access, quality, tier pool, and map layout slot. */
 const BODY: Record<WaterBody, Omit<Spot, "id" | "name" | "regionId" | "blurb" | "body">> = {
-  stream: { water: "fresh", access: "land", quality: "C", tiers: tw([[1, 0.65], [2, 0.35]]), pos: [-6, -4] },
+  // Streams skew hard to T1: the tutorial water should hook easy fish 9 casts
+  // in 10 — bait is how you coax the T2s out.
+  stream: { water: "fresh", access: "land", quality: "C", tiers: tw([[1, 0.9], [2, 0.1]]), pos: [-6, -4] },
   river: { water: "fresh", access: "land", quality: "B", tiers: tw([[2, 0.5], [3, 0.35], [4, 0.15]]), pos: [-5, 2] },
   lake: { water: "fresh", access: "land", quality: "B", tiers: tw([[3, 0.5], [4, 0.35], [5, 0.15]]), pos: [-2, -2] },
   dock: { water: "fresh", access: "land", quality: "A", tiers: tw([[3, 0.2], [4, 0.45], [5, 0.35]]), pos: [-1, 2.5] },

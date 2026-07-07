@@ -95,7 +95,9 @@ export function RegionMap({
             key={s.id}
             spot={s}
             resting={restUntilFor(s) > 0}
-            tutorialDim={!!tutorialSpotId && s.id !== tutorialSpotId}
+            // First-timers are confined to gentle T1-2 water — anything that
+            // can hook a T3+ fish is locked until the tutorial is done.
+            tutorialDim={!!tutorialSpotId && Math.max(...s.tiers.map((t) => t.tier)) > 2}
             tutorialTarget={s.id === tutorialSpotId}
             onSelect={(sp) => {
               sfx.uiTap();

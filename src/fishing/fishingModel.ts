@@ -44,6 +44,12 @@ export interface FishSpec {
    * Good tension control reduces the shake-off chance but can't eliminate it.
    */
   hookHold?: number;
+  /**
+   * Seconds (after the reaction grace) for the fish's lateral movement to ramp
+   * from the slow opening to full speed/amplitude. Lower tiers get long ramps
+   * (gentle openings); the big fish are at full pace almost immediately.
+   */
+  rampSec?: number;
 }
 
 export interface LineSpec {
@@ -83,6 +89,8 @@ export interface FightState {
   running: boolean;
   /** Seconds left in the current run. */
   runTimer: number;
+  /** Seconds since the hook was set (drives the movement ramp). */
+  fightTime: number;
   /** Countdown until a bite (waiting phase). */
   waitTimer: number;
   /** Countdown of the bite window (bite phase). */
@@ -128,6 +136,13 @@ export const TUNING = {
   /** Fraction-of-maxTension band considered "well managed" for slip. */
   slipBandLo: 0.25,
   slipBandHi: 0.82,
+  /** Seconds an average player needs to START steering — the fish moves at the
+   *  slow floor for this long after the hook is set. */
+  rampDelay: 1.0,
+  /** Fraction of full lateral speed/amplitude during the opening. */
+  rampFloor: 0.3,
+  /** Fallback FishSpec.rampSec (seconds from grace end to full pace). */
+  defaultRampSec: 3,
 } as const;
 
 export function makeFight(fish: FishSpec): FightState {
@@ -143,6 +158,7 @@ export function makeFight(fish: FishSpec): FightState {
     fishDirCurrent: 0,
     running: false,
     runTimer: 0,
+    fightTime: 0,
     waitTimer: 0,
     biteTimer: 0,
     message: "Tap to cast",
@@ -179,18 +195,26 @@ export function stepFight(
 ): FightState {
   switch (s.phase) {
     case "waiting": {
+      // Pulling before the bobber goes under scares the fish off — the cast is
+      // over. This is what makes watching the bobber (twitch = nibble, hard
+      // dip = bite) an actual skill instead of theater.
+      if (input.setHook) {
+        s.phase = "idle";
+        s.message = "Too soon — you pulled on nothing. Cast again.";
+        return s;
+      }
       s.waitTimer -= dt;
       if (s.waitTimer <= 0) {
         s.phase = "bite";
         s.biteTimer = TUNING.biteWindow;
-        s.message = "Fish on! Set the hook!";
+        s.message = "Fish on! PULL!";
       }
       return s;
     }
 
     case "bite": {
       s.biteTimer -= dt;
-      // Forgiving hookset: an explicit tap OR any real reel/steer input sets it.
+      // Forgiving hookset: an explicit pull OR any real reel/steer input sets it.
       const engaged =
         input.setHook || input.reel > 0.15 || Math.abs(input.steer) > 0.3;
       if (engaged) {
@@ -198,8 +222,9 @@ export function stepFight(
         s.running = false;
         s.message = "";
       } else if (s.biteTimer <= 0) {
+        // Missed the window — the cast is over.
         s.phase = "idle";
-        s.message = "It spat the hook. Tap to cast";
+        s.message = "Too slow — it spat the hook. Cast again.";
       }
       return s;
     }
@@ -214,6 +239,17 @@ export function stepFight(
   // ---- Active fight ----
   const reel = clamp(input.reel, 0, 1);
   const steer = clamp(input.steer, -1, 1);
+
+  // Reaction ramp: the fish opens sluggish (an average player needs ~1s to
+  // start steering), then its lateral pace grows PARABOLICALLY to full
+  // speed/amplitude over rampSec. Low tiers ramp slowly; big fish are at full
+  // pace almost immediately.
+  s.fightTime += dt;
+  const tRamp = Math.max(0, s.fightTime - TUNING.rampDelay);
+  const ramp = Math.min(
+    1,
+    TUNING.rampFloor + (1 - TUNING.rampFloor) * (tRamp / (fish.rampSec ?? TUNING.defaultRampSec)) ** 2,
+  );
 
   // Fish AI: start/continue/end runs.
   if (s.running) {
@@ -237,8 +273,10 @@ export function stepFight(
   }
 
   // Smooth actual pull direction toward the target at the fish's agility rate.
-  const maxStep = fish.agility * dt;
-  s.fishDirCurrent += clamp(s.fishDir - s.fishDirCurrent, -maxStep, maxStep);
+  // The ramp throttles both the dart rate AND the swing amplitude, so early-
+  // fight movement is slow and close to center, growing to the full ±1 range.
+  const maxStep = fish.agility * ramp * dt;
+  s.fishDirCurrent += clamp(s.fishDir * ramp - s.fishDirCurrent, -maxStep, maxStep);
 
   // How well the player is countering the lateral pull.
   // Ideal steer is OPPOSITE the fish's direction, so opposition > 0 when
@@ -262,8 +300,12 @@ export function stepFight(
   // A tired fish yields line faster; a better pole (reelMult) reels faster.
   const tiredBonus = 1 + (1 - s.stamina) * 0.8;
   const gain = reel * TUNING.reelSpeed * tiredBonus * (line.reelMult ?? 1);
-  // The fish only takes meaningful line on an uncountered run.
-  const lineOut = s.running ? pull * (1 - counter) * TUNING.runPull : 0;
+  // The fish only takes meaningful line on an uncountered run. Runs during the
+  // opening ramp take proportionally less line — the fish hasn't woken up yet
+  // (this is what makes the early fight genuinely gentler, and it also keeps
+  // the ramp-capped counter from being unwinnable: counter can only reach
+  // |fishDirCurrent| ≤ ramp, so the pull must scale with it).
+  const lineOut = s.running ? pull * ramp * (1 - counter) * TUNING.runPull : 0;
   s.distance = clamp(s.distance + (lineOut - gain) * dt, 0, s.startDistance);
 
   // Pressure tires the fish; slack lets it recover.
