@@ -10,8 +10,8 @@ Species roster and tier difficulty: **[fish_tiers.md](fish_tiers.md)**.
 
 Each bait has a **bait tier** (2–8) that drives a **hook table** — the weighted roll for which
 difficulty tier bites. Equipping bait **replaces the spot's natural tier pool** with that table
-(when the bait can target tiers the spot offers). Bait does **not** make reeling easier; gear and
-skill handle the fight.
+(when the bait can target tiers the spot offers). Bait does **not** make reeling easier; line/pole
+gear and skill handle the fight — see **[gear.md](gear.md)**.
 
 **Other effects:**
 

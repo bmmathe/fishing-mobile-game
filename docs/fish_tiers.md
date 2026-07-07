@@ -56,7 +56,7 @@ These are **fight** outcomes once a fish is hooked — not bite odds (bait contr
 | 8 | Legendary | **boat** | snap |
 
 Tiers 6–8 are **near-impossible on the starter line** — they require **line upgrades** (a stronger line
-raises the snap limit) *and* a **boat** to reach the deep-water spots. See §6.
+raises the snap limit) *and* a **boat** to reach the deep-water spots. See §6 and **[gear.md](gear.md)**.
 
 ## 4. Difficulty parameters per tier
 
@@ -174,10 +174,9 @@ These systems are **built** and consume the catalog data. (Details in the README
   equip one at a time. Each hook adds **`holdBonus`** to `hookHold` for matching tiers only,
   reducing shake-offs during runs. Hooks are **consumed when the line snaps** (restock at the shop).
   Validate: `npm run sim:hook`.
-- **Gear: line + pole** ([gear.ts](../src/game/gear.ts) `LINE_TIERS`/`POLE_TIERS`): the starter line
-  is deliberately weak (`maxTension 0.78`); buying **line tiers** raises `maxTension`, the lever that
-  unlocks tier 6–8 fish (line steps 0.78 → 10). **Pole tiers** raise reel speed. Validate:
-  `npm run sim:gear`.
+- **Gear: line + pole** — full roster, fight mechanics, unlock curve, and economy:
+  **[gear.md](gear.md)**. Source: [`gear.ts`](../src/game/gear.ts) `LINE_TIERS`/`POLE_TIERS`.
+  Validate: `npm run sim:gear`.
 - **Boats** ([gear.ts](../src/game/gear.ts) `BOAT_TIERS`): 4 tiers (lake-only → ocean-capable) reach
   the boat-only deep-water spots via the top-down boat view. Validate: `npm run sim:boat`.
 - **Map / travel / locations** ([regions.ts](../src/world/regions.ts)): the US is 8 regions; you
@@ -188,6 +187,7 @@ These systems are **built** and consume the catalog data. (Details in the README
 
 ```bash
 npm run sim         # per-tier fight win-rate vs targets (no bait)
+npm run sim:gear    # line unlock curve + pole/line affordability
 npm run sim:bait    # bait hook-table validation
 npm run sim:hook    # hook hold-bonus matrix
 npm run sim -- --hook panfish   # quick single-hook fight check

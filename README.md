@@ -79,7 +79,7 @@ Desktop testing: `Enter` casts, `↓`/`Space` reels, `←`/`→` steer.
 
 ## Fish tiers (8) — `src/fishing/fishCatalog.ts`
 
-Full roster and fight params: **[docs/fish_tiers.md](docs/fish_tiers.md)**. Bait hook tables and chains: **[docs/bait.md](docs/bait.md)**.
+Full roster and fight params: **[docs/fish_tiers.md](docs/fish_tiers.md)**. Bait hook tables and chains: **[docs/bait.md](docs/bait.md)**. Line and pole gear: **[docs/gear.md](docs/gear.md)**.
 
 Tiers are **difficulty bands**, orthogonal to **water** (fresh/salt) and
 **location**. Each tier targets a skilled catch-rate on the _starter_ line:
@@ -182,6 +182,8 @@ an inventory ([playerStore.ts](src/game/playerStore.ts)); at the **Tackle Shop**
 - **Pole tiers** raise reel speed (`reelMult`).
 - **Hook tackle** reduces shake-offs for matching tiers (`holdBonus` on `hookHold`);
   hooks are bought in the shop, equipped like bait, and **lost when the line snaps**.
+
+Full line/pole mechanics, unlock curve, and economy: **[docs/gear.md](docs/gear.md)**.
 
 Gear feeds the fight via `store.applyGear(maxTension, reelMult)` and `store.setHook(...)`; the App banks
 catches through a `fishingStore.onCatch` hook. Progress persists to
