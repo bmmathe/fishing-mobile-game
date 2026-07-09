@@ -22,9 +22,12 @@ gear and skill handle the fight — see **[gear.md](gear.md)**.
   tier the table and spot share (e.g. T2 bait at a T1–2 stream: the “above tier” slot becomes T1).
 - **No overlap** — if the bait's hook table shares **no tiers** with the spot, bait is ignored and
   the spot's natural pool is used.
-- **Water** — bait is **sourced** from fresh- or saltwater forage fish (see tables below). Once in
-  your bait box, you can equip it at any spot; the species rolled still comes from the spot's water
-  type at the chosen tier.
+- **Water** — live bait is **sourced** from fresh- or saltwater forage fish (see tables below);
+  shop bait (Worms, synthetic lures) has no water of its own. Once in your bait box, any bait can
+  be equipped at any spot; the species rolled still comes from the spot's water type at the chosen
+  tier.
+- **Consumption** — live bait is eaten by the bite (one unit per non-junk bite, even if the hook
+  is missed). Synthetic lures follow their own wear/loss rules — see section 3.
 
 Validate tuning: `npm run sim:bait`
 
@@ -74,8 +77,8 @@ income. All other bait is **catch-only** (keep a forage fish from the cooler →
 
 ## 4. Freshwater bait (catch-only)
 
-| Bait | Source fish | Advertised lure range | Bait tier | Typical hook mix |
-|------|-------------|----------------------|-----------|------------------|
+| Bait | Source fish | Catalog `forTiers` | Bait tier (derived) | Typical hook mix |
+|------|-------------|--------------------|---------------------|------------------|
 | **Fathead Minnow** | T1 forage | T2–T3 | **T3** | **70% T3**, 30% T2 |
 | **Golden Shiner** | T1 forage | T2–T3 | **T3** | **70% T3**, 30% T2 |
 | **Gizzard Shad** | T2 panfish/schooler | T3–T4 | **T4** | **60% T4**, 30% T3, 10% T2 |
@@ -86,8 +89,8 @@ income. All other bait is **catch-only** (keep a forage fish from the cooler →
 
 ## 5. Saltwater bait (catch-only)
 
-| Bait | Source fish | Advertised lure range | Bait tier | Typical hook mix |
-|------|-------------|----------------------|-----------|------------------|
+| Bait | Source fish | Catalog `forTiers` | Bait tier (derived) | Typical hook mix |
+|------|-------------|--------------------|---------------------|------------------|
 | **Bay Anchovy** | T1 forage | T2–T3 | **T3** | **70% T3**, 30% T2 |
 | **Sand Eel** | T1 forage | T2–T3 | **T3** | **70% T3**, 30% T2 |
 | **Menhaden** | T2 pier fish | T3–T5 | **T4** | **60% T4**, 30% T3, 10% T2 |
@@ -124,7 +127,8 @@ catch-only forage.
    tables skip T1 entirely, so no junk on those baits.
 5. **Wait time** — Small forage (grade 1) bites fastest; Golden Shiner and Sand Eel are especially
    flashy (`waitFactor` 0.55). Grade 2 cut bait is tier-focused; grade 3 rare live bait is tuned for
-   monsters with modest wait help.
+   monsters with modest wait help. Synthetic lures barely help the wait (Spinner 0.95, Deep
+   Diver 1.0) — their value is tier targeting.
 
 ---
 
