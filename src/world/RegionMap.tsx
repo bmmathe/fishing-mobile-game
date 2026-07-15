@@ -84,13 +84,15 @@ export function RegionMap({
           intensity={1.1}
           castShadow
           shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-16}
-          shadow-camera-right={16}
-          shadow-camera-top={16}
-          shadow-camera-bottom={-16}
+          shadow-camera-left={-14}
+          shadow-camera-right={5}
+          shadow-camera-top={12}
+          shadow-camera-bottom={-12}
           shadow-camera-near={1}
-          shadow-camera-far={45}
-          shadow-normalBias={0.02}
+          shadow-camera-far={40}
+          shadow-normalBias={0.05}
+          shadow-bias={-0.0015}
+          shadow-radius={4}
         />
 
         <Terrain />
@@ -200,16 +202,23 @@ function useCoastSlab(offset: number, depth: number) {
 /** Plan B grass-tone patches (§4.2): flat tinted discs scatter dry/dark mottling
  *  across the field. Vertex-color noise on the extruded slab was tried first but
  *  the cap has no interior vertices to tint, so the effect was invisible. Positions
- *  are hand-picked to sit in open grass between POIs and clear of pond banks. */
+ *  are hand-picked to sit in open grass between POIs and clear of pond banks.
+ *  Offset 0.01 above the land top (0.3): the original 0.001 gap wasn't enough
+ *  depth-buffer separation at typical camera distance and z-fought with the
+ *  slab underneath (visible as dashed banding across the field).
+ *  Heights are additionally staggered per patch (+0.005 steps): several patches
+ *  overlap each other, and two discs at the identical y are exactly coplanar in
+ *  the overlap — z-fighting that flickers while the camera moves and freezes
+ *  into a dithered checkerboard when it stops. */
 const GRASS_PATCHES: { pos: [number, number, number]; r: number; color: string }[] = [
-  { pos: [-8.5, 0.301, -6.5], r: 2.4, color: palette.grassDark },
-  { pos: [-10.5, 0.301, 3], r: 2.6, color: palette.grassDry },
-  { pos: [-3.5, 0.301, 6.5], r: 2.5, color: palette.grassDark },
-  { pos: [1.4, 0.301, 5.4], r: 1.7, color: palette.grassDry },
-  { pos: [-6, 0.301, 7.5], r: 2.3, color: palette.grassDark },
-  { pos: [-2, 0.301, 7.8], r: 1.8, color: palette.grassDry },
-  { pos: [-10, 0.301, -4], r: 1.9, color: palette.grassDark },
-  { pos: [1, 0.301, 0], r: 1.6, color: palette.grassDry },
+  { pos: [-8.5, 0.31, -6.5], r: 2.4, color: palette.grassDark },
+  { pos: [-10.5, 0.315, 3], r: 2.6, color: palette.grassDry },
+  { pos: [-3.5, 0.32, 6.5], r: 2.5, color: palette.grassDark },
+  { pos: [1.4, 0.325, 5.4], r: 1.7, color: palette.grassDry },
+  { pos: [-6, 0.33, 7.5], r: 2.3, color: palette.grassDark },
+  { pos: [-2, 0.335, 7.8], r: 1.8, color: palette.grassDry },
+  { pos: [-10, 0.34, -4], r: 1.9, color: palette.grassDark },
+  { pos: [1, 0.345, 0], r: 1.6, color: palette.grassDry },
 ];
 
 /** Ocean, grass landmass with a wavy coast, sand fringe, and a foam line. */
@@ -224,17 +233,52 @@ function Terrain() {
         <planeGeometry args={[60, 44]} />
         <WaterMaterial deep={palette.water} gradient={false} />
       </mesh>
-      {/* shallow-water tint just off the coast */}
-      <mesh geometry={foam} position={[0, -0.19, 0]} receiveShadow>
-        <meshStandardMaterial color={palette.waterShallow} flatShading roughness={0.45} />
+      {/* shallow-water tint just off the coast.
+          land/sand/foam all close their extruded shape at the same south (z=11)
+          and north (z=-11) edge, so their vertical side walls sit exactly
+          coplanar over the height range they share — a guaranteed z-fight,
+          visible as a flickering dashed line along the map's south edge.
+          polygonOffset pins a stable draw priority (foam furthest back, land
+          frontmost) so the fight always resolves the same way.
+          None of the three receive real-time shadows: this ground is one huge
+          flat mesh sitting under dozens of props (trees, rocks, hummocks,
+          mountains) at every distance and angle, and no combination of bias/
+          normalBias/radius tuning removed shadow-map acne everywhere at once —
+          it just moved to a different prop's shadow edge. Props already have
+          their own soft BlobShadow decal for ground contact, so dropping the
+          real shadow-map receive here trades a subtle contact shadow for
+          zero flicker. */}
+      <mesh geometry={foam} position={[0, -0.19, 0]}>
+        <meshStandardMaterial
+          color={palette.waterShallow}
+          flatShading
+          roughness={0.45}
+          polygonOffset
+          polygonOffsetFactor={2}
+          polygonOffsetUnits={2}
+        />
       </mesh>
       {/* sand fringe */}
-      <mesh geometry={sand} position={[0, -0.2, 0]} receiveShadow>
-        <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
+      <mesh geometry={sand} position={[0, -0.2, 0]}>
+        <meshStandardMaterial
+          color={palette.sand}
+          flatShading
+          roughness={1}
+          polygonOffset
+          polygonOffsetFactor={1}
+          polygonOffsetUnits={1}
+        />
       </mesh>
       {/* grass top */}
-      <mesh geometry={land} position={[0, -0.2, 0]} receiveShadow castShadow>
-        <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
+      <mesh geometry={land} position={[0, -0.2, 0]}>
+        <meshStandardMaterial
+          color={palette.grass}
+          flatShading
+          roughness={1}
+          polygonOffset
+          polygonOffsetFactor={0}
+          polygonOffsetUnits={0}
+        />
       </mesh>
       {/* flat grass-tone patches mottle the otherwise uniform field (§4.2 Plan B) */}
       {GRASS_PATCHES.map((p, i) => (
@@ -270,21 +314,37 @@ function ShoreDecor() {
 
       {/* Gentle grass hummocks so the field isn't one flat plane. Positions are
           hand-checked to clear every California pond/pin footprint (see plan §4.3);
-          heights stay ≤0.6 so they read as meadow swells, not hills. */}
-      <mesh position={[-8, 0.18, 7]} scale={[2.2, 0.55, 1.8]} castShadow receiveShadow>
-        <icosahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color={palette.grassDark} flatShading roughness={1} />
-      </mesh>
-      <mesh position={[-3.5, 0.15, 8]} scale={[2.3, 0.5, 1.8]} castShadow receiveShadow>
-        <icosahedronGeometry args={[1, 0]} />
+          heights stay ≤0.6 so they read as meadow swells, not hills. The three
+          southern hummocks' x-extents must stay non-overlapping — the original
+          scales had two of them touching exactly and a third overlapping by
+          0.7 units, so their convex surfaces interpenetrated and z-fought at
+          the seam (flickering dashes right where two hills met).
+          icosahedronGeometry detail=1 (not 0): at detail 0 each hummock is
+          only 20 giant flat facets squashed hard in y, and several facets end
+          up nearly coplanar with the flat land they're embedded in over a
+          wide area — real z-fighting (view-angle-dependent flicker, not
+          shadow acne) right where the hummock meets the ground. detail=1
+          quadruples the face count so no single facet is big enough to
+          coincide with the ground over a visible patch.
+          No castShadow/receiveShadow: these are low-poly convex blobs embedded
+          halfway into the ground plane, so a hummock's own real-time shadow map
+          silhouette sits almost tangent to the flat land it's buried in —
+          shadow acne along that edge (visible as a flickering dashed band on
+          and around each hummock) regardless of bias tuning. They're subtle
+          enough that skipping the dynamic shadow entirely reads fine.
+          The dark hummock that was at [-8.2, 0.18, 7] kept z-fighting against
+          the flat land no matter how the facets/spacing were tuned, so it was
+          removed outright rather than continuing to chase the artifact. */}
+      <mesh position={[-3.5, 0.15, 8]} scale={[1.9, 0.5, 1.8]}>
+        <icosahedronGeometry args={[1, 1]} />
         <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
       </mesh>
-      <mesh position={[0, 0.18, 8.2]} scale={[1.9, 0.6, 1.6]} castShadow receiveShadow>
-        <icosahedronGeometry args={[1, 0]} />
+      <mesh position={[0.5, 0.18, 8.2]} scale={[1.6, 0.6, 1.6]}>
+        <icosahedronGeometry args={[1, 1]} />
         <meshStandardMaterial color={palette.grassDry} flatShading roughness={1} />
       </mesh>
-      <mesh position={[-9.3, 0.12, 1.5]} scale={[2.0, 0.4, 1.6]} castShadow receiveShadow>
-        <icosahedronGeometry args={[1, 0]} />
+      <mesh position={[-9.3, 0.12, 1.5]} scale={[2.0, 0.4, 1.6]}>
+        <icosahedronGeometry args={[1, 1]} />
         <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
       </mesh>
 
