@@ -24,7 +24,7 @@ export function Mountain({ position, scale = 1, color = "#9aa0a6" }: { position:
       {/* main peak */}
       <mesh position={[0, 0.55, 0]} rotation={[0, 0.4, 0]} castShadow>
         <coneGeometry args={[0.7, 1.2, 5]} />
-        <meshStandardMaterial color={color} flatShading roughness={1} />
+        <meshStandardMaterial color={color} flatShading roughness={0.9} />
       </mesh>
       <mesh position={[0, 1.02, 0]} rotation={[0, 0.4, 0]}>
         <coneGeometry args={[0.26, 0.36, 5]} />
@@ -33,7 +33,7 @@ export function Mountain({ position, scale = 1, color = "#9aa0a6" }: { position:
       {/* shoulder peaks */}
       <mesh position={[0.55, 0.32, 0.25]} rotation={[0, 1.1, 0]} castShadow>
         <coneGeometry args={[0.42, 0.72, 5]} />
-        <meshStandardMaterial color={color} flatShading roughness={1} />
+        <meshStandardMaterial color={color} flatShading roughness={0.9} />
       </mesh>
       <mesh position={[0.55, 0.6, 0.25]} rotation={[0, 1.1, 0]}>
         <coneGeometry args={[0.15, 0.2, 5]} />
@@ -41,7 +41,7 @@ export function Mountain({ position, scale = 1, color = "#9aa0a6" }: { position:
       </mesh>
       <mesh position={[-0.5, 0.26, -0.2]} rotation={[0, 2.2, 0]} castShadow>
         <coneGeometry args={[0.36, 0.6, 5]} />
-        <meshStandardMaterial color={color} flatShading roughness={1} />
+        <meshStandardMaterial color={color} flatShading roughness={0.9} />
       </mesh>
     </group>
   );
@@ -285,17 +285,17 @@ export function Rock({ position, scale = 1, cluster = false, color = palette.roc
     <group position={position} scale={scale}>
       <mesh position={[0, 0.12, 0]} rotation={[0.3, 0.8, 0.1]} castShadow>
         <icosahedronGeometry args={[0.22, 0]} />
-        <meshStandardMaterial color={color} flatShading roughness={1} />
+        <meshStandardMaterial color={color} flatShading roughness={0.85} />
       </mesh>
       {cluster && (
         <>
           <mesh position={[0.26, 0.07, 0.1]} rotation={[0.8, 0.2, 0.5]} castShadow>
             <icosahedronGeometry args={[0.13, 0]} />
-            <meshStandardMaterial color={palette.rockDark} flatShading roughness={1} />
+            <meshStandardMaterial color={palette.rockDark} flatShading roughness={0.85} />
           </mesh>
           <mesh position={[-0.2, 0.05, -0.14]} rotation={[0.2, 1.4, 0.9]} castShadow>
             <icosahedronGeometry args={[0.1, 0]} />
-            <meshStandardMaterial color={palette.rockDark} flatShading roughness={1} />
+            <meshStandardMaterial color={palette.rockDark} flatShading roughness={0.85} />
           </mesh>
         </>
       )}

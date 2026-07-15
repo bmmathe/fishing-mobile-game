@@ -36,6 +36,10 @@ export const palette = {
   hullWhite: "#f0ece0",
   hullTrim: "#5f8fa8",
   cliff: "#c7b394",
+  // Lighting (warm sun / cool fill)
+  sunlight: "#ffedd0",
+  skyFill: "#cfe8ef",
+  groundFill: "#8fae7c",
   wheat: "#e3cd8e",
   cactus: "#7fb069",
   lighthouse: "#f2ead9",

@@ -67,12 +67,28 @@ export function RegionMap({
         dpr={[1, 2]}
         camera={{ position: [focus[0], 14, focus[1] + 15], fov: 38, near: 0.1, far: 200 }}
         gl={{ antialias: true }}
+        onCreated={({ gl }) => {
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        }}
       >
         <color attach="background" args={[palette.sky]} />
         <fog attach="fog" args={[palette.fog, 35, 80]} />
-        <ambientLight intensity={0.9} />
-        <hemisphereLight args={[palette.sky, palette.grassDark, 0.5]} />
-        <directionalLight position={[8, 18, 6]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
+        <ambientLight intensity={0.62} />
+        <hemisphereLight args={[palette.skyFill, palette.groundFill, 0.7]} />
+        <directionalLight
+          color={palette.sunlight}
+          position={[9, 17, 7]}
+          intensity={1.1}
+          castShadow
+          shadow-mapSize={[2048, 2048]}
+          shadow-camera-left={-16}
+          shadow-camera-right={16}
+          shadow-camera-top={16}
+          shadow-camera-bottom={-16}
+          shadow-camera-near={1}
+          shadow-camera-far={45}
+          shadow-normalBias={0.02}
+        />
 
         <Terrain />
         <ShoreDecor />
@@ -181,11 +197,11 @@ function Terrain() {
       {/* Ocean (covers everything; land layers stack on top to the west) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.2, 0]} receiveShadow>
         <planeGeometry args={[60, 44]} />
-        <meshStandardMaterial color={palette.water} flatShading roughness={0.5} />
+        <meshStandardMaterial color={palette.water} flatShading roughness={0.35} />
       </mesh>
       {/* shallow-water tint just off the coast */}
       <mesh geometry={foam} position={[0, -0.19, 0]} receiveShadow>
-        <meshStandardMaterial color={palette.waterShallow} flatShading roughness={0.6} />
+        <meshStandardMaterial color={palette.waterShallow} flatShading roughness={0.45} />
       </mesh>
       {/* sand fringe */}
       <mesh geometry={sand} position={[0, -0.2, 0]} receiveShadow>
@@ -252,7 +268,7 @@ function FreshWaterBody({ spot }: { spot: Spot }) {
       </mesh>
       <mesh position={[0, 0.325, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[radius, 20]} />
-        <meshStandardMaterial color={palette.waterDeep} flatShading roughness={0.6} />
+        <meshStandardMaterial color={palette.waterDeep} flatShading roughness={0.35} />
       </mesh>
       {/* bank dressing */}
       <Reeds position={[radius * 0.82, 0.32, radius * 0.35]} scale={0.9} />
@@ -290,7 +306,7 @@ function SaltShoreDressing({ spot }: { spot: Spot }) {
       </mesh>
       <mesh position={[0, -0.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[2.0, 20]} />
-        <meshStandardMaterial color={palette.waterShallow} flatShading roughness={0.6} />
+        <meshStandardMaterial color={palette.waterShallow} flatShading roughness={0.45} />
       </mesh>
       <Rock position={[1.1, -0.1, 0.6]} scale={0.7} cluster />
       <RippleRing position={[-1.4, -0.11, -0.8]} period={3.4} />
