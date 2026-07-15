@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Group } from "three";
@@ -542,6 +542,65 @@ export function RippleRing({ position, period = 2.4, size = 1, maxOpacity = 0.45
       <ringGeometry args={[0.42, 0.5, 20]} />
       <meshBasicMaterial color={palette.foam} transparent opacity={0.4} side={THREE.DoubleSide} depthWrite={false} />
     </mesh>
+  );
+}
+
+/** A ring of tiny grass-tuft cones around a POI (single InstancedMesh, one draw call). */
+export function GrassTufts({ center, innerRadius, outerRadius, count = 40, seed = 1 }:
+  { center: [number, number, number]; innerRadius: number; outerRadius: number; count?: number; seed?: number }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  // Deterministic placement so the map looks identical every visit (no Math.random).
+  useEffect(() => {
+    const m = ref.current; if (!m) return;
+    const dummy = new THREE.Object3D();
+    let s = seed;
+    const rand = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    for (let i = 0; i < count; i++) {
+      const a = rand() * Math.PI * 2;
+      const r = innerRadius + rand() * (outerRadius - innerRadius);
+      dummy.position.set(center[0] + Math.cos(a) * r, center[1], center[2] + Math.sin(a) * r);
+      const sc = 0.5 + rand() * 0.8;
+      dummy.scale.set(sc, sc * (0.7 + rand() * 0.6), sc);
+      dummy.rotation.y = rand() * Math.PI;
+      dummy.updateMatrix();
+      m.setMatrixAt(i, dummy.matrix);
+    }
+    m.instanceMatrix.needsUpdate = true;
+  }, [center, innerRadius, outerRadius, count, seed]);
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, count]} raycast={() => null} receiveShadow>
+      <coneGeometry args={[0.05, 0.22, 4]} />
+      <meshStandardMaterial color={palette.reed} flatShading roughness={1} />
+    </instancedMesh>
+  );
+}
+
+/** A ring of tiny squashed pebbles around a POI (single InstancedMesh, one draw call). */
+export function Pebbles({ center, innerRadius, outerRadius, count = 25, seed = 1 }:
+  { center: [number, number, number]; innerRadius: number; outerRadius: number; count?: number; seed?: number }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  useEffect(() => {
+    const m = ref.current; if (!m) return;
+    const dummy = new THREE.Object3D();
+    let s = seed;
+    const rand = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    for (let i = 0; i < count; i++) {
+      const a = rand() * Math.PI * 2;
+      const r = innerRadius + rand() * (outerRadius - innerRadius);
+      dummy.position.set(center[0] + Math.cos(a) * r, center[1], center[2] + Math.sin(a) * r);
+      const sc = 0.5 + rand() * 0.8;
+      dummy.scale.set(sc, sc * 0.6, sc);
+      dummy.rotation.y = rand() * Math.PI;
+      dummy.updateMatrix();
+      m.setMatrixAt(i, dummy.matrix);
+    }
+    m.instanceMatrix.needsUpdate = true;
+  }, [center, innerRadius, outerRadius, count, seed]);
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, count]} raycast={() => null} receiveShadow>
+      <icosahedronGeometry args={[0.05, 0]} />
+      <meshStandardMaterial color={palette.pebble} flatShading roughness={1} />
+    </instancedMesh>
   );
 }
 

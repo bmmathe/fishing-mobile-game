@@ -7,6 +7,8 @@ export const palette = {
   waterDeep: "#5aa9bd",
   grass: "#bcd9a0",
   grassDark: "#a6c98a",
+  grassDry: "#c9d69a",
+  pebble: "#b5b1a6",
   sand: "#ead9b0",
   path: "#e4e2dc",
   treeLeaf: "#8fc07a",

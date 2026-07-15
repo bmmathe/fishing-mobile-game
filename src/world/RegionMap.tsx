@@ -11,10 +11,12 @@ import {
   Cloud,
   Dock,
   Fish,
+  GrassTufts,
   Gull,
   LeafTree,
   LilyPad,
   Mountain,
+  Pebbles,
   PineTree,
   Reeds,
   RippleRing,
@@ -188,6 +190,21 @@ function useCoastSlab(offset: number, depth: number) {
   }, [offset, depth]);
 }
 
+/** Plan B grass-tone patches (§4.2): flat tinted discs scatter dry/dark mottling
+ *  across the field. Vertex-color noise on the extruded slab was tried first but
+ *  the cap has no interior vertices to tint, so the effect was invisible. Positions
+ *  are hand-picked to sit in open grass between POIs and clear of pond banks. */
+const GRASS_PATCHES: { pos: [number, number, number]; r: number; color: string }[] = [
+  { pos: [-8.5, 0.301, -6.5], r: 2.4, color: palette.grassDark },
+  { pos: [-10.5, 0.301, 3], r: 2.6, color: palette.grassDry },
+  { pos: [-3.5, 0.301, 6.5], r: 2.5, color: palette.grassDark },
+  { pos: [1.4, 0.301, 5.4], r: 1.7, color: palette.grassDry },
+  { pos: [-6, 0.301, 8.5], r: 2.3, color: palette.grassDark },
+  { pos: [-1, 0.301, 10], r: 2.0, color: palette.grassDry },
+  { pos: [-11.5, 0.301, -4], r: 2.0, color: palette.grassDark },
+  { pos: [1, 0.301, 0], r: 1.6, color: palette.grassDry },
+];
+
 /** Ocean, grass landmass with a wavy coast, sand fringe, and a foam line. */
 function Terrain() {
   const land = useCoastSlab(0, 0.5);
@@ -212,6 +229,13 @@ function Terrain() {
       <mesh geometry={land} position={[0, -0.2, 0]} receiveShadow castShadow>
         <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
       </mesh>
+      {/* flat grass-tone patches mottle the otherwise uniform field (§4.2 Plan B) */}
+      {GRASS_PATCHES.map((p, i) => (
+        <mesh key={`gp-${i}`} position={p.pos} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+          <circleGeometry args={[p.r, 20]} />
+          <meshStandardMaterial color={p.color} flatShading roughness={1} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -236,6 +260,26 @@ function ShoreDecor() {
       <Rock position={[-3.2, 0.3, 6.4]} cluster />
       <Rock position={[0.2, 0.3, 4.2]} scale={0.8} />
       <Rock position={[-7, 0.3, -1.4]} scale={0.9} cluster />
+
+      {/* Gentle grass hummocks so the field isn't one flat plane. Positions are
+          hand-checked to clear every California pond/pin footprint (see plan §4.3);
+          heights stay ≤0.6 so they read as meadow swells, not hills. */}
+      <mesh position={[-8, 0.18, 7]} scale={[2.2, 0.55, 1.8]} castShadow receiveShadow>
+        <icosahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial color={palette.grassDark} flatShading roughness={1} />
+      </mesh>
+      <mesh position={[-3.5, 0.15, 8]} scale={[2.3, 0.5, 1.8]} castShadow receiveShadow>
+        <icosahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.18, 9.3]} scale={[1.9, 0.6, 1.6]} castShadow receiveShadow>
+        <icosahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial color={palette.grassDry} flatShading roughness={1} />
+      </mesh>
+      <mesh position={[-9.3, 0.12, 1.5]} scale={[2.0, 0.4, 1.6]} castShadow receiveShadow>
+        <icosahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
+      </mesh>
 
       {/* Coastline foam ripples + ocean life */}
       <RippleRing position={[4.6, -0.13, -6]} period={3.2} />
@@ -293,6 +337,13 @@ function FreshWaterBody({ spot }: { spot: Spot }) {
       {spot.body === "dock" && (
         <Dock position={[-radius * 0.2, 0.18, -radius * 1.1]} scale={0.8} planks={4} width={1.1} />
       )}
+      {/* scruffy dressed band of tufts + pebbles rings the pond; two hand-placed
+          props add asymmetry. Seeds are deterministic (from world pos) so the
+          scatter is identical every visit. */}
+      <GrassTufts center={[0, 0.3, 0]} innerRadius={radius * 1.25} outerRadius={radius * 1.9} count={36} seed={Math.round(x * 13 + z * 7)} />
+      <Pebbles center={[0, 0.3, 0]} innerRadius={radius * 1.2} outerRadius={radius * 1.8} count={20} seed={Math.round(x * 5 + z * 11)} />
+      <Reeds position={[radius * 0.1, 0.32, -radius * 0.9]} scale={0.85} />
+      <Rock position={[-radius * 1.15, 0.3, radius * 0.5]} scale={0.5} />
     </group>
   );
 }
