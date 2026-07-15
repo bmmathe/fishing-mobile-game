@@ -73,7 +73,7 @@ export function RegionMap({
       >
         <color attach="background" args={[palette.sky]} />
         <fog attach="fog" args={[palette.fog, 35, 80]} />
-        <ambientLight intensity={0.62} />
+        <ambientLight intensity={0.68} />
         <hemisphereLight args={[palette.skyFill, palette.groundFill, 0.7]} />
         <directionalLight
           color={palette.sunlight}
@@ -265,6 +265,11 @@ function FreshWaterBody({ spot }: { spot: Spot }) {
       <mesh position={[0, 0.315, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[radius * 1.22, 20]} />
         <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
+      </mesh>
+      {/* damp-sand rim seats the water into the bank instead of on top of it */}
+      <mesh position={[0, 0.32, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <ringGeometry args={[radius * 0.96, radius * 1.08, 24]} />
+        <meshStandardMaterial color={palette.sandWet} flatShading roughness={1} />
       </mesh>
       <mesh position={[0, 0.325, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[radius, 20]} />

@@ -69,7 +69,7 @@ Replace the current three light lines:
 with:
 
 ```tsx
-<ambientLight intensity={0.62} />
+<ambientLight intensity={0.68} />
 <hemisphereLight args={[palette.skyFill, palette.groundFill, 0.7]} />
 <directionalLight
   color={palette.sunlight}
@@ -90,7 +90,7 @@ with:
 Rationale (do not change these numbers — they were tuned against screenshots and approved):
 ambient 0.9 flattened everything, but the fix must stay gentle. **The art style is "soft, light,
 airy": shadows must read as pale tinted patches, never heavy dark blobs.** These exact values
-(ambient 0.62 / hemi 0.7 / sun 1.1 at a high angle) keep overall scene brightness essentially
+(ambient 0.68 / hemi 0.7 / sun 1.1 at a high angle) keep overall scene brightness essentially
 unchanged from the original while adding just enough directionality. A first attempt at
 ambient 0.3 / sun 1.6 / low sun angle was rejected for darkening the scene — do not drift back
 toward high-contrast values. The tight shadow camera (±16 covers the ~26-unit landmass) is what
@@ -162,8 +162,8 @@ function getBlobShadowTexture() {
   c.width = c.height = 128;
   const ctx = c.getContext("2d")!;
   const g = ctx.createRadialGradient(64, 64, 8, 64, 64, 64);
-  g.addColorStop(0, "rgba(46, 66, 58, 0.38)"); // soft cool green-grey core
-  g.addColorStop(0.6, "rgba(46, 66, 58, 0.18)");
+  g.addColorStop(0, "rgba(46, 66, 58, 0.26)"); // soft cool green-grey core — keep FAINT (airy style)
+  g.addColorStop(0.6, "rgba(46, 66, 58, 0.12)");
   g.addColorStop(1, "rgba(46, 66, 58, 0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
@@ -228,11 +228,19 @@ rim ring so the water sits *in* a depression instead of on top of a pancake:
 
 ### 2.4 Drifting cloud shadows (`src/world/MapDecor.tsx`, `Cloud`)
 
-Add `castShadow` to all three icosahedron meshes inside `Cloud`. Because clouds already drift on
-the x axis, this produces slow-moving soft shadow patches sweeping across the terrain — very high
-charm for a one-word-per-mesh change. Verify the shadows look soft and dim; if they read too
-dark against the airy style, remove `castShadow` from the two smaller side puffs (keeping only
-the main puff's shadow) before touching the light rig.
+Do NOT use real `castShadow` on the cloud meshes — it was tried and produced a hard dark polygon
+patch that violates the airy style. Instead, fake it: add a stretched `BlobShadow` as a child of
+the cloud's drifting group, positioned at ground height, so a pale oval drifts with the cloud:
+
+```tsx
+<group scale={[1.5, 1, 1.1]} position={[0, (0.34 - position[1]) / scale, 0]}>
+  <BlobShadow position={[0, 0, 0]} radius={0.9} />
+</group>
+```
+
+(0.34 ≈ just above the land top at y 0.3; dividing by the cloud's `scale` keeps the blob at
+ground level regardless of cloud size. Over the ocean the blob floats ~0.5 above the water —
+invisible from the game's top-down camera, don't try to fix it.)
 
 ### Phase 2 expected result
 

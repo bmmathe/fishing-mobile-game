@@ -36,6 +36,7 @@ export const palette = {
   hullWhite: "#f0ece0",
   hullTrim: "#5f8fa8",
   cliff: "#c7b394",
+  sandWet: "#d8c49a",
   // Lighting (warm sun / cool fill)
   sunlight: "#ffedd0",
   skyFill: "#cfe8ef",

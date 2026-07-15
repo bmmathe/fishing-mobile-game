@@ -17,10 +17,40 @@ import { palette } from "../scene/palette";
 
 type V3 = [number, number, number];
 
+/** Shared radial-gradient texture for cheap contact shadows (one texture for all blobs). */
+let blobShadowTexture: THREE.CanvasTexture | null = null;
+function getBlobShadowTexture() {
+  if (blobShadowTexture) return blobShadowTexture;
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const ctx = c.getContext("2d")!;
+  // Cool green-grey, kept faint — the art style wants pale shade, not dark blobs.
+  const g = ctx.createRadialGradient(64, 64, 8, 64, 64, 64);
+  g.addColorStop(0, "rgba(46, 66, 58, 0.26)");
+  g.addColorStop(0.6, "rgba(46, 66, 58, 0.12)");
+  g.addColorStop(1, "rgba(46, 66, 58, 0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  blobShadowTexture = new THREE.CanvasTexture(c);
+  return blobShadowTexture;
+}
+
+/** Soft contact shadow blob that grounds a prop. Place at the prop's base. */
+export function BlobShadow({ position, radius = 0.4 }: { position: V3; radius?: number }) {
+  const map = useMemo(getBlobShadowTexture, []);
+  return (
+    <mesh position={position} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+      <circleGeometry args={[radius, 16]} />
+      <meshBasicMaterial map={map} transparent depthWrite={false} />
+    </mesh>
+  );
+}
+
 /** A small cluster of 2–3 faceted peaks with snow caps (reads better than one cone). */
 export function Mountain({ position, scale = 1, color = "#9aa0a6" }: { position: V3; scale?: number; color?: string }) {
   return (
     <group position={position} scale={scale}>
+      <BlobShadow position={[0, 0.01, 0]} radius={1.1} />
       {/* main peak */}
       <mesh position={[0, 0.55, 0]} rotation={[0, 0.4, 0]} castShadow>
         <coneGeometry args={[0.7, 1.2, 5]} />
@@ -51,6 +81,7 @@ export function Mountain({ position, scale = 1, color = "#9aa0a6" }: { position:
 export function PineTree({ position, scale = 1, lean = 0 }: { position: V3; scale?: number; lean?: number }) {
   return (
     <group position={position} scale={scale} rotation={[0, 0, lean]}>
+      <BlobShadow position={[0, 0.01, 0]} radius={0.45} />
       <mesh position={[0, 0.22, 0]} castShadow>
         <cylinderGeometry args={[0.07, 0.09, 0.45, 5]} />
         <meshStandardMaterial color={palette.trunk} flatShading roughness={1} />
@@ -75,6 +106,7 @@ export function PineTree({ position, scale = 1, lean = 0 }: { position: V3; scal
 export function LeafTree({ position, scale = 1 }: { position: V3; scale?: number }) {
   return (
     <group position={position} scale={scale}>
+      <BlobShadow position={[0.05, 0.01, 0.03]} radius={0.42} />
       <mesh position={[0, 0.25, 0]} castShadow>
         <cylinderGeometry args={[0.06, 0.1, 0.5, 5]} />
         <meshStandardMaterial color={palette.trunk} flatShading roughness={1} />
@@ -96,6 +128,7 @@ export function PalmTree({ position, scale = 1 }: { position: V3; scale?: number
   const fronds = [0, 1, 2, 3, 4, 5];
   return (
     <group position={position} scale={scale}>
+      <BlobShadow position={[0.15, 0.01, 0]} radius={0.5} />
       {/* curved trunk from three leaning segments */}
       <mesh position={[0, 0.2, 0]} rotation={[0, 0, 0.1]} castShadow>
         <cylinderGeometry args={[0.06, 0.09, 0.42, 5]} />
@@ -228,6 +261,11 @@ export function Cloud({ position, scale = 1, speed = 0.25, range = 14 }: { posit
   });
   return (
     <group ref={ref} position={position} scale={scale}>
+      {/* faked ground shadow drifting with the cloud — a real castShadow reads
+          too hard/dark for the airy style. Local y puts it just above the land top. */}
+      <group scale={[1.5, 1, 1.1]} position={[0, (0.34 - position[1]) / scale, 0]}>
+        <BlobShadow position={[0, 0, 0]} radius={0.9} />
+      </group>
       <mesh>
         <icosahedronGeometry args={[0.55, 0]} />
         <meshStandardMaterial color={palette.cloud} flatShading roughness={1} />
@@ -283,12 +321,14 @@ export function Gull({ position, scale = 1, radius = 2.2, speed = 0.5 }: { posit
 export function Rock({ position, scale = 1, cluster = false, color = palette.rock }: { position: V3; scale?: number; cluster?: boolean; color?: string }) {
   return (
     <group position={position} scale={scale}>
+      <BlobShadow position={[0, 0.01, 0]} radius={0.3} />
       <mesh position={[0, 0.12, 0]} rotation={[0.3, 0.8, 0.1]} castShadow>
         <icosahedronGeometry args={[0.22, 0]} />
         <meshStandardMaterial color={color} flatShading roughness={0.85} />
       </mesh>
       {cluster && (
         <>
+          <BlobShadow position={[0.24, 0.01, 0.08]} radius={0.18} />
           <mesh position={[0.26, 0.07, 0.1]} rotation={[0.8, 0.2, 0.5]} castShadow>
             <icosahedronGeometry args={[0.13, 0]} />
             <meshStandardMaterial color={palette.rockDark} flatShading roughness={0.85} />
@@ -391,6 +431,7 @@ export function Reeds({ position, scale = 1 }: { position: V3; scale?: number })
   ];
   return (
     <group position={position} scale={scale}>
+      <BlobShadow position={[0, 0.01, 0]} radius={0.16} />
       {blades.map((b, i) => (
         <group key={i} position={b.p} rotation={[0, i * 1.3, b.lean]}>
           <mesh position={[0, b.h / 2, 0]} castShadow>
