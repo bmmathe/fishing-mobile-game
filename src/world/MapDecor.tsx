@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Group } from "three";
@@ -78,6 +78,19 @@ export function Mountain({ position, scale = 1, color = "#9aa0a6" }: { position:
 }
 
 /** Three-tier pine with a slight lean so a row of them doesn't look stamped. */
+/** Gentle wind sway for tree canopies (trunks stay planted). amp is radians; keep <= 0.04.
+ *  The per-tree seed MUST differ or synchronized sway looks mechanical. */
+function Sway({ children, seed = 0, amp = 0.025 }: { children: ReactNode; seed?: number; amp?: number }) {
+  const ref = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.elapsedTime + seed;
+    ref.current.rotation.z = Math.sin(t * 1.3) * amp;
+    ref.current.rotation.x = Math.sin(t * 0.9 + 1.7) * amp * 0.6;
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 export function PineTree({ position, scale = 1, lean = 0 }: { position: V3; scale?: number; lean?: number }) {
   return (
     <group position={position} scale={scale} rotation={[0, 0, lean]}>
@@ -86,18 +99,20 @@ export function PineTree({ position, scale = 1, lean = 0 }: { position: V3; scal
         <cylinderGeometry args={[0.07, 0.09, 0.45, 5]} />
         <meshStandardMaterial color={palette.trunk} flatShading roughness={1} />
       </mesh>
-      <mesh position={[0, 0.55, 0]} castShadow>
-        <coneGeometry args={[0.4, 0.6, 6]} />
-        <meshStandardMaterial color={palette.treePine} flatShading roughness={1} />
-      </mesh>
-      <mesh position={[0, 0.88, 0]} castShadow>
-        <coneGeometry args={[0.31, 0.52, 6]} />
-        <meshStandardMaterial color={palette.treeLeafAlt} flatShading roughness={1} />
-      </mesh>
-      <mesh position={[0, 1.18, 0]} castShadow>
-        <coneGeometry args={[0.2, 0.4, 6]} />
-        <meshStandardMaterial color={palette.treeLeaf} flatShading roughness={1} />
-      </mesh>
+      <Sway seed={position[0] * 3 + position[2]}>
+        <mesh position={[0, 0.55, 0]} castShadow>
+          <coneGeometry args={[0.4, 0.6, 6]} />
+          <meshStandardMaterial color={palette.treePine} flatShading roughness={1} />
+        </mesh>
+        <mesh position={[0, 0.88, 0]} castShadow>
+          <coneGeometry args={[0.31, 0.52, 6]} />
+          <meshStandardMaterial color={palette.treeLeafAlt} flatShading roughness={1} />
+        </mesh>
+        <mesh position={[0, 1.18, 0]} castShadow>
+          <coneGeometry args={[0.2, 0.4, 6]} />
+          <meshStandardMaterial color={palette.treeLeaf} flatShading roughness={1} />
+        </mesh>
+      </Sway>
     </group>
   );
 }
@@ -111,14 +126,16 @@ export function LeafTree({ position, scale = 1 }: { position: V3; scale?: number
         <cylinderGeometry args={[0.06, 0.1, 0.5, 5]} />
         <meshStandardMaterial color={palette.trunk} flatShading roughness={1} />
       </mesh>
-      <mesh position={[0, 0.68, 0]} castShadow>
-        <icosahedronGeometry args={[0.36, 0]} />
-        <meshStandardMaterial color={palette.treeLeaf} flatShading roughness={1} />
-      </mesh>
-      <mesh position={[0.18, 0.52, 0.1]} castShadow>
-        <icosahedronGeometry args={[0.24, 0]} />
-        <meshStandardMaterial color={palette.treeLeafAlt} flatShading roughness={1} />
-      </mesh>
+      <Sway seed={position[0] * 3 + position[2]}>
+        <mesh position={[0, 0.68, 0]} castShadow>
+          <icosahedronGeometry args={[0.36, 0]} />
+          <meshStandardMaterial color={palette.treeLeaf} flatShading roughness={1} />
+        </mesh>
+        <mesh position={[0.18, 0.52, 0.1]} castShadow>
+          <icosahedronGeometry args={[0.24, 0]} />
+          <meshStandardMaterial color={palette.treeLeafAlt} flatShading roughness={1} />
+        </mesh>
+      </Sway>
     </group>
   );
 }
@@ -147,17 +164,19 @@ export function PalmTree({ position, scale = 1 }: { position: V3; scale?: number
         <icosahedronGeometry args={[0.06, 0]} />
         <meshStandardMaterial color="#8a6a45" flatShading roughness={1} />
       </mesh>
-      {fronds.map((i) => (
-        <mesh
-          key={i}
-          position={[0.26, 1.12, 0]}
-          rotation={[0.62, (i / fronds.length) * Math.PI * 2, 0]}
-          castShadow
-        >
-          <coneGeometry args={[0.11, 0.68, 4]} />
-          <meshStandardMaterial color={i % 2 ? "#7cb86a" : "#6fae5e"} flatShading roughness={1} />
-        </mesh>
-      ))}
+      <Sway seed={position[0] * 3 + position[2]} amp={0.04}>
+        {fronds.map((i) => (
+          <mesh
+            key={i}
+            position={[0.26, 1.12, 0]}
+            rotation={[0.62, (i / fronds.length) * Math.PI * 2, 0]}
+            castShadow
+          >
+            <coneGeometry args={[0.11, 0.68, 4]} />
+            <meshStandardMaterial color={i % 2 ? "#7cb86a" : "#6fae5e"} flatShading roughness={1} />
+          </mesh>
+        ))}
+      </Sway>
     </group>
   );
 }

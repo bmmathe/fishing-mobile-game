@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
@@ -113,6 +113,7 @@ export function RegionMap({
           <SpotPin
             key={s.id}
             spot={s}
+            selected={selected?.id === s.id}
             resting={restUntilFor(s) > 0}
             // First-timers are confined to gentle T1-2 water — anything that
             // can hook a T3+ fish is locked until the tutorial is done.
@@ -124,6 +125,12 @@ export function RegionMap({
             }}
           />
         ))}
+
+        <SplashSpawner
+          points={landSpots
+            .filter((s) => s.water === "fresh")
+            .map((s) => [s.pos[0], 0.36, s.pos[1]] as [number, number, number])}
+        />
 
         <MapOrbitControls
           target={[focus[0], 0, focus[1] + 1]}
@@ -381,12 +388,15 @@ function SaltShoreDressing({ spot }: { spot: Spot }) {
 function SpotPin({
   spot,
   onSelect,
+  selected = false,
   resting = false,
   tutorialDim = false,
   tutorialTarget = false,
 }: {
   spot: Spot;
   onSelect: (s: Spot) => void;
+  /** This spot's SpotCard is currently open — pop the pin, gold ring, ripple burst. */
+  selected?: boolean;
   /** Spot rest: fished out — grayed but still tappable (card shows countdown). */
   resting?: boolean;
   /** Tutorial: this pin is inactive & grayed out. */
@@ -395,17 +405,34 @@ function SpotPin({
   tutorialTarget?: boolean;
 }) {
   const [hover, setHover] = useState(false);
+  const groupRef = useRef<THREE.Group>(null);
   const bobberRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const arrowRef = useRef<THREE.Mesh>(null);
+  const burstRef = useRef<THREE.Mesh>(null);
+  // One-shot selection ripple: start < 0 means idle; a useEffect arms it on select.
+  const burst = useRef({ armed: false, start: -1 });
   const [x, z] = spot.pos;
   const locked = spot.access === "boat" || tutorialDim;
   const base = spot.water === "fresh" ? "#4f8f74" : "#3f8fa0";
   const color = locked || resting ? "#8a8f96" : base;
+  const gold = tutorialTarget || selected;
   const seed = x * 1.7 + z;
 
-  useFrame(({ clock }) => {
+  // Fire one ripple burst on the frame `selected` flips to true.
+  useEffect(() => {
+    if (selected) { burst.current.armed = true; burst.current.start = -1; }
+  }, [selected]);
+
+  useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime + seed;
+    // Smooth spring-pop toward the target scale (no spring lib): exponential ease.
+    if (groupRef.current) {
+      const target = selected ? 1.28 : hover ? 1.18 : 1;
+      const cur = groupRef.current.scale.x;
+      const next = cur + (target - cur) * (1 - Math.exp(-12 * delta));
+      groupRef.current.scale.setScalar(next);
+    }
     // The bobber head floats gently; the ground ring pulses.
     if (bobberRef.current) bobberRef.current.position.y = 1.05 + Math.sin(t * 1.8) * 0.06;
     if (ringRef.current) {
@@ -414,6 +441,23 @@ function SpotPin({
     }
     // Tutorial arrow bounces above the target pin.
     if (arrowRef.current) arrowRef.current.position.y = 2.5 + Math.abs(Math.sin(t * 3)) * 0.35;
+    // One-shot selection ripple: scale 0.5 -> 2.2, fade 0.5 -> 0 over 0.6s, then hide.
+    if (burstRef.current) {
+      const b = burst.current;
+      if (b.armed && b.start < 0) b.start = clock.elapsedTime;
+      if (b.armed) {
+        const p = (clock.elapsedTime - b.start) / 0.6;
+        if (p >= 1) {
+          b.armed = false;
+          burstRef.current.visible = false;
+        } else {
+          burstRef.current.visible = true;
+          const s = 0.5 + p * 1.7;
+          burstRef.current.scale.set(s, s, s);
+          (burstRef.current.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - p);
+        }
+      }
+    }
   });
 
   // Shared hit handlers for the pin. Empty when locked so tutorial-dimmed /
@@ -452,7 +496,7 @@ function SpotPin({
   };
 
   return (
-    <group position={[x, 0.45, z]} scale={hover ? 1.18 : 1}>
+    <group ref={groupRef} position={[x, 0.45, z]}>
       {/* Invisible sphere — the thin bobber pole is a tiny hit target; this is the mobile tap target. */}
       <mesh position={[0, 0.75, 0]} {...pick}>
         <sphereGeometry args={[1.05, 12, 10]} />
@@ -477,16 +521,21 @@ function SpotPin({
           <meshStandardMaterial color={palette.sail} flatShading roughness={1} />
         </mesh>
       </group>
-      {/* pulsing locator ring on the ground (gold for the tutorial target) */}
+      {/* pulsing locator ring on the ground (gold for the tutorial target or when selected) */}
       <mesh ref={ringRef} position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
         <ringGeometry args={tutorialTarget ? [0.55, 0.72, 24] : [0.45, 0.55, 22]} />
         <meshBasicMaterial
-          color={tutorialTarget ? "#f4c453" : locked || resting ? "#9aa0a5" : color}
+          color={gold ? "#f4c453" : locked || resting ? "#9aa0a5" : color}
           transparent
-          opacity={tutorialTarget ? 0.75 : resting ? 0.25 : 0.45}
+          opacity={tutorialTarget ? 0.75 : selected ? 0.7 : resting ? 0.25 : 0.45}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
+      </mesh>
+      {/* one-shot ripple burst emitted when the spot is selected (hidden until armed) */}
+      <mesh ref={burstRef} position={[0, -0.09, 0]} rotation={[-Math.PI / 2, 0, 0]} visible={false} raycast={() => null}>
+        <ringGeometry args={[0.5, 0.62, 24]} />
+        <meshBasicMaterial color="#f4c453" transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
       {/* bouncing "here!" arrow for the tutorial */}
       {tutorialTarget && (
@@ -512,6 +561,90 @@ function SpotPin({
           {spot.name}
         </div>
       </Html>
+    </group>
+  );
+}
+
+/**
+ * Occasional foam splash on the fresh ponds. One hidden group is repositioned
+ * and shown for each splash (no mount/unmount, no per-frame allocation): three
+ * foam cones that rise + tilt outward and fade, plus one expanding fading ring.
+ * Placement is random; timing is random (8–15s between splashes) — only the
+ * pond centers are fixed. There is no splash sound in sfx, so audio is skipped.
+ */
+function SplashSpawner({ points }: { points: [number, number, number][] }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const cone0 = useRef<THREE.Mesh>(null);
+  const cone1 = useRef<THREE.Mesh>(null);
+  const cone2 = useRef<THREE.Mesh>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
+  // scheduling + active-splash state, all in refs (never setState per frame)
+  const state = useRef({ next: 4, start: -1, active: false });
+
+  // Stagger the first splash a few seconds in.
+  useEffect(() => { state.current.next = 4 + Math.random() * 6; }, []);
+
+  useFrame(({ clock }) => {
+    if (points.length === 0) return;
+    const cones = [cone0.current, cone1.current, cone2.current];
+    const g = groupRef.current;
+    const now = clock.elapsedTime;
+    const st = state.current;
+
+    if (!st.active && now >= st.next) {
+      const p = points[Math.floor(Math.random() * points.length)];
+      if (g) {
+        g.position.set(p[0] + (Math.random() - 0.5) * 0.8, p[1], p[2] + (Math.random() - 0.5) * 0.8);
+        g.visible = true;
+      }
+      st.active = true;
+      st.start = now;
+    }
+
+    if (st.active) {
+      const prog = (now - st.start) / 0.6;
+      if (prog >= 1) {
+        st.active = false;
+        if (g) g.visible = false;
+        st.next = now + 8 + Math.random() * 7; // next splash in 8–15s
+      } else {
+        for (let i = 0; i < 3; i++) {
+          const m = cones[i];
+          if (!m) continue;
+          const a = (i / 3) * Math.PI * 2;
+          const spread = 0.05 + prog * 0.18;
+          m.position.set(Math.cos(a) * spread, 0.02 + prog * 0.25, Math.sin(a) * spread);
+          m.rotation.z = -Math.cos(a) * prog * 0.9;
+          m.rotation.x = Math.sin(a) * prog * 0.9;
+          (m.material as THREE.MeshStandardMaterial).opacity = 1 - prog;
+        }
+        if (ringRef.current) {
+          const s = 0.4 + prog * 1.4;
+          ringRef.current.scale.set(s, s, s);
+          (ringRef.current.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - prog);
+        }
+      }
+    }
+  });
+
+  return (
+    <group ref={groupRef} visible={false} raycast={() => null}>
+      <mesh ref={cone0}>
+        <coneGeometry args={[0.03, 0.14, 4]} />
+        <meshStandardMaterial color={palette.foam} flatShading roughness={1} transparent opacity={1} />
+      </mesh>
+      <mesh ref={cone1}>
+        <coneGeometry args={[0.03, 0.14, 4]} />
+        <meshStandardMaterial color={palette.foam} flatShading roughness={1} transparent opacity={1} />
+      </mesh>
+      <mesh ref={cone2}>
+        <coneGeometry args={[0.03, 0.14, 4]} />
+        <meshStandardMaterial color={palette.foam} flatShading roughness={1} transparent opacity={1} />
+      </mesh>
+      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.14, 0.2, 20]} />
+        <meshBasicMaterial color={palette.foam} transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
     </group>
   );
 }
