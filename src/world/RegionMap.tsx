@@ -199,9 +199,9 @@ const GRASS_PATCHES: { pos: [number, number, number]; r: number; color: string }
   { pos: [-10.5, 0.301, 3], r: 2.6, color: palette.grassDry },
   { pos: [-3.5, 0.301, 6.5], r: 2.5, color: palette.grassDark },
   { pos: [1.4, 0.301, 5.4], r: 1.7, color: palette.grassDry },
-  { pos: [-6, 0.301, 8.5], r: 2.3, color: palette.grassDark },
-  { pos: [-1, 0.301, 10], r: 2.0, color: palette.grassDry },
-  { pos: [-11.5, 0.301, -4], r: 2.0, color: palette.grassDark },
+  { pos: [-6, 0.301, 7.5], r: 2.3, color: palette.grassDark },
+  { pos: [-2, 0.301, 7.8], r: 1.8, color: palette.grassDry },
+  { pos: [-10, 0.301, -4], r: 1.9, color: palette.grassDark },
   { pos: [1, 0.301, 0], r: 1.6, color: palette.grassDry },
 ];
 
@@ -272,7 +272,7 @@ function ShoreDecor() {
         <icosahedronGeometry args={[1, 0]} />
         <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
       </mesh>
-      <mesh position={[0, 0.18, 9.3]} scale={[1.9, 0.6, 1.6]} castShadow receiveShadow>
+      <mesh position={[0, 0.18, 8.2]} scale={[1.9, 0.6, 1.6]} castShadow receiveShadow>
         <icosahedronGeometry args={[1, 0]} />
         <meshStandardMaterial color={palette.grassDry} flatShading roughness={1} />
       </mesh>
