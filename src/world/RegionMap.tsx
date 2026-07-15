@@ -22,6 +22,7 @@ import {
   Sailboat,
 } from "./MapDecor";
 import { MAP_PLAYER_CONTROLS_OFFSET } from "./mapLayout";
+import { WaterMaterial } from "./WaterMaterial";
 
 /**
  * Level 2 of the overworld: a low-poly diorama of one region. Land on the west,
@@ -197,7 +198,7 @@ function Terrain() {
       {/* Ocean (covers everything; land layers stack on top to the west) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.2, 0]} receiveShadow>
         <planeGeometry args={[60, 44]} />
-        <meshStandardMaterial color={palette.water} flatShading roughness={0.35} />
+        <WaterMaterial deep={palette.water} gradient={false} />
       </mesh>
       {/* shallow-water tint just off the coast */}
       <mesh geometry={foam} position={[0, -0.19, 0]} receiveShadow>
@@ -273,8 +274,15 @@ function FreshWaterBody({ spot }: { spot: Spot }) {
       </mesh>
       <mesh position={[0, 0.325, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[radius, 20]} />
-        <meshStandardMaterial color={palette.waterDeep} flatShading roughness={0.35} />
+        <WaterMaterial radius={radius} />
       </mesh>
+      {/* moving surface ripples (lakes & rivers only — streams are too small) */}
+      {spot.body !== "stream" && (
+        <>
+          <RippleRing position={[radius * 0.3, 0.34, -radius * 0.2]} period={3.1} size={0.7} maxOpacity={0.3} />
+          <RippleRing position={[-radius * 0.4, 0.34, radius * 0.3]} period={4.3} size={0.5} maxOpacity={0.25} />
+        </>
+      )}
       {/* bank dressing */}
       <Reeds position={[radius * 0.82, 0.32, radius * 0.35]} scale={0.9} />
       <Reeds position={[-radius * 0.7, 0.32, -radius * 0.55]} scale={0.75} />
@@ -311,7 +319,7 @@ function SaltShoreDressing({ spot }: { spot: Spot }) {
       </mesh>
       <mesh position={[0, -0.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[2.0, 20]} />
-        <meshStandardMaterial color={palette.waterShallow} flatShading roughness={0.45} />
+        <WaterMaterial deep={palette.waterShallow} shallow={palette.foam} radius={2.0} />
       </mesh>
       <Rock position={[1.1, -0.1, 0.6]} scale={0.7} cluster />
       <RippleRing position={[-1.4, -0.11, -0.8]} period={3.4} />

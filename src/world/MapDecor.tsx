@@ -527,15 +527,15 @@ export function Sailboat({ position, scale = 1 }: { position: V3; scale?: number
 }
 
 /** An expanding, fading foam ring on the water (continuous ripple loop). */
-export function RippleRing({ position, period = 2.4 }: { position: V3; period?: number }) {
+export function RippleRing({ position, period = 2.4, size = 1, maxOpacity = 0.45 }: { position: V3; period?: number; size?: number; maxOpacity?: number }) {
   const ref = useRef<THREE.Mesh>(null);
   const seed = position[0] + position[2] * 0.7;
   useFrame(({ clock }) => {
     if (!ref.current) return;
     const t = ((clock.elapsedTime + seed) % period) / period;
-    const s = 0.4 + t * 1.6;
+    const s = (0.4 + t * 1.6) * size;
     ref.current.scale.set(s, s, s);
-    (ref.current.material as THREE.MeshBasicMaterial).opacity = 0.45 * (1 - t);
+    (ref.current.material as THREE.MeshBasicMaterial).opacity = maxOpacity * (1 - t);
   });
   return (
     <mesh ref={ref} position={position} rotation={[-Math.PI / 2, 0, 0]}>
