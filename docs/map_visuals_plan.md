@@ -373,6 +373,16 @@ Implementation notes (important — read before coding):
   import errors, type the parameter as `any` rather than fighting it.
 - `customProgramCacheKey` is required: without it three.js may share one compiled program across
   water instances with different uniforms baked in.
+- **The fresnel snippet above is written against `vNormal`, but the material sets `flatShading`.**
+  With flat shading three defines `FLAT_SHADED` and does NOT declare the `vNormal` varying, so the
+  program fails to link — every water mesh silently disappears and the console spams
+  `WebGL: INVALID_OPERATION: useProgram: program not valid` (three does NOT throw a JS error).
+  Use `normal` instead — the flat-shading-aware fragment normal from `<normal_fragment_begin>`,
+  still in scope at `<opaque_fragment>`: `dot(viewDirF, normal)` (already normalized, no
+  `normalize()` needed). The implemented WaterMaterial.tsx does this.
+- On this three version (r169) the fresnel replace anchor is `#include <opaque_fragment>`, NOT
+  `#include <output_fragment>` (renamed back in r132). A non-matching anchor also makes water
+  render wrong / fog break — the two symptoms to watch for.
 
 ### 3.2 Use it
 
