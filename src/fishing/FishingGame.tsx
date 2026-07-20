@@ -31,7 +31,10 @@ export function FishingGame({
         dpr={[1, 2]}
         camera={{ position: [0, 4.4, -6], fov: 42, near: 0.1, far: 120 }}
         onCreated={({ camera }) => camera.lookAt(0, 1, 7)}
-        gl={{ antialias: true }}
+        // Low exposure (matching the three.js sky example) compresses the HDR
+        // sky into rich golden-hour color; the scene's fill lights are raised
+        // to keep the diorama bright under it.
+        gl={{ antialias: true, toneMappingExposure: 0.52 }}
       >
         <FishingScene store={store} />
       </Canvas>

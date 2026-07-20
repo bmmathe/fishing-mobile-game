@@ -1,5 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Sky } from "@react-three/drei";
 import * as THREE from "three";
 import { palette } from "../scene/palette";
 import { Cloud, Gull, Islet, Reeds, Rock } from "../world/MapDecor";
@@ -12,6 +13,25 @@ const MIN_Z = 2.2;
 const LATERAL = 4.2;
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+/** Sun placement ranges for the Preetham sky, in the three.js example's own
+ *  terms. A low elevation (degrees above the horizon) gives the golden-hour
+ *  glow + visible sun disc; azimuth 0 is straight out across the water in
+ *  front of the fixed camera (which looks toward +Z), so we swing it a little
+ *  left/right of that. Randomized per fishing session so each trip feels like
+ *  a slightly different time of day. */
+const SUN_ELEVATION_RANGE: [number, number] = [0.5, 6]; // low, golden-hour (stays warm)
+const SUN_AZIMUTH_SPREAD = 20; // ±10° off-center, sun stays comfortably in view
+
+/** Roll a fresh sun direction for one fishing session. */
+function randomSunPosition(): THREE.Vector3 {
+  const elevation = THREE.MathUtils.randFloat(SUN_ELEVATION_RANGE[0], SUN_ELEVATION_RANGE[1]);
+  const azimuth = THREE.MathUtils.randFloatSpread(SUN_AZIMUTH_SPREAD);
+  const phi = THREE.MathUtils.degToRad(90 - elevation);
+  const theta = THREE.MathUtils.degToRad(azimuth);
+  return new THREE.Vector3().setFromSphericalCoords(1, phi, theta);
+}
+
 const GREEN = new THREE.Color(palette.treePine);
 const YELLOW = new THREE.Color("#e8c468");
 const RED = new THREE.Color("#d4564f");
@@ -37,6 +57,10 @@ export function FishingScene({ store }: { store: FishingStore }) {
 
   // Scratch vectors reused each frame (no per-frame allocation).
   const v = useMemo(() => ({ tip: new THREE.Vector3(), fish: new THREE.Vector3(), col: new THREE.Color() }), []);
+
+  // Roll the sun once per session (the scene remounts each time you cast off),
+  // so the sky's position/height varies trip to trip.
+  const sunPosition = useMemo(() => randomSunPosition(), []);
 
   useFrame((_, dt) => {
     store.advance(dt);
@@ -100,14 +124,37 @@ export function FishingScene({ store }: { store: FishingStore }) {
 
   return (
     <group>
-      {/* Lighting */}
-      <color attach="background" args={[palette.sky]} />
-      <fog attach="fog" args={[palette.fog, 22, 55]} />
-      <ambientLight intensity={0.85} />
-      <hemisphereLight args={[palette.sky, palette.grassDark, 0.5]} />
+      {/* Lighting — golden hour. */}
+      <color attach="background" args={["#f3d9b8"]} />
+      {/* Warm, glowing fog so distant islets melt into the sunset horizon
+          instead of fading to mint. */}
+      <fog attach="fog" args={["#f3d9b8", 22, 55]} />
+
+      {/* Atmospheric sky dome — three.js Preetham "sky + sun" shader via drei.
+          The sun sits low on the water (SUN_ELEVATION_DEG) so we get the
+          reference's dynamic look: a warm gold horizon with a real sun disc,
+          fading up into teal-blue. These are the example's own default
+          scattering values (turbidity 10, rayleigh 2). */}
+      <Sky
+        distance={4000}
+        sunPosition={sunPosition}
+        turbidity={10}
+        rayleigh={3}
+        mieCoefficient={0.005}
+        mieDirectionalG={0.7}
+      />
+      {/* Fill stays bright and warm so the scene reads as golden glow, never a
+          dark silhouette. Intensities are pushed up to counter the low tone-
+          mapping exposure (set on the Canvas) that enriches the sky — so the
+          diorama surfaces keep their light, airy feel. */}
+      <ambientLight intensity={1.5} color="#ffe9cf" />
+      <hemisphereLight args={["#ffe1b8", "#d8b98a", 1.1]} />
+      {/* Warm key light. Kept high/to the side (not at the low sun) so the
+          angler and dock stay lit toward the camera rather than backlit. */}
       <directionalLight
-        position={[8, 14, -4]}
-        intensity={1.6}
+        position={[6, 11, 2]}
+        intensity={2.8}
+        color="#ffdba6"
         castShadow
         shadow-mapSize={[1024, 1024]}
         shadow-camera-left={-15}
