@@ -14,6 +14,13 @@ const LATERAL = 4.2;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+/** Water plane dimensions — shared by the geometry and the height sampler
+ *  (so the float can ride the exact same surface the mesh renders). */
+const WATER_SIZE = 80;
+const WATER_SEG = 60;
+/** World Y the water mesh is parked at (its rippling vertices bob around this). */
+const WATER_BASE_Y = -0.05;
+
 /** Sun placement ranges for the Preetham sky, in the three.js example's own
  *  terms. A low elevation (degrees above the horizon) gives the golden-hour
  *  glow + visible sun disc; azimuth 0 is straight out across the water in
@@ -35,6 +42,25 @@ function randomSunPosition(): THREE.Vector3 {
 const GREEN = new THREE.Color(palette.treePine);
 const YELLOW = new THREE.Color("#e8c468");
 const RED = new THREE.Color("#d4564f");
+
+/** Local wave height of the rippling water plane at world (x, z), bilinearly
+ *  interpolated from the four surrounding grid vertices. Call after the plane's
+ *  vertices have been updated for the frame; add WATER_BASE_Y for world height. */
+function sampleWaterHeight(pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, x: number, z: number): number {
+  const step = WATER_SIZE / WATER_SEG;
+  const gx = THREE.MathUtils.clamp((x + WATER_SIZE / 2) / step, 0, WATER_SEG);
+  const gz = THREE.MathUtils.clamp((z + WATER_SIZE / 2) / step, 0, WATER_SEG);
+  const ix = Math.floor(Math.min(gx, WATER_SEG - 1));
+  const iz = Math.floor(Math.min(gz, WATER_SEG - 1));
+  const tx = gx - ix;
+  const tz = gz - iz;
+  const row = WATER_SEG + 1;
+  const y00 = pos.getY(iz * row + ix);
+  const y10 = pos.getY(iz * row + ix + 1);
+  const y01 = pos.getY((iz + 1) * row + ix);
+  const y11 = pos.getY((iz + 1) * row + ix + 1);
+  return THREE.MathUtils.lerp(THREE.MathUtils.lerp(y00, y10, tx), THREE.MathUtils.lerp(y01, y11, tx), tz);
+}
 
 /** Position/orient a unit-Y cylinder so it spans points a→b. */
 function spanSegment(obj: THREE.Object3D, a: THREE.Vector3, b: THREE.Vector3) {
@@ -62,13 +88,48 @@ export function FishingScene({ store }: { store: FishingStore }) {
   // so the sky's position/height varies trip to trip.
   const sunPosition = useMemo(() => randomSunPosition(), []);
 
+  // Rippling water surface: a horizontal plane whose vertices bob on sine
+  // waves (per-vertex amplitude + phase, à la the classic three.js example).
+  // The rotateX is baked into the geometry so setY moves each vertex straight
+  // up; the mesh itself is left unrotated. Amplitudes are kept small so the
+  // surface reads as calm pastel water, not chop.
+  const water = useMemo(() => {
+    const geometry = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, WATER_SEG, WATER_SEG);
+    geometry.rotateX(-Math.PI / 2);
+    const pos = geometry.attributes.position;
+    const tmp = new THREE.Vector3();
+    const waves: { initY: number; amp: number; phaseA: number; phaseB: number }[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      tmp.fromBufferAttribute(pos, i);
+      // Two crossing swells (diagonal + anti-diagonal) interfere for an
+      // organic, faceted surface. The spatial terms keep neighbouring
+      // vertices moving together; a little jitter breaks up the regularity.
+      const jitter = THREE.MathUtils.randFloatSpread(0.6);
+      waves.push({
+        initY: tmp.y,
+        amp: THREE.MathUtils.randFloat(0.1, 0.17),
+        phaseA: (tmp.x + tmp.z) * 0.95 + jitter,
+        phaseB: (tmp.x - tmp.z) * 0.7 + jitter,
+      });
+    }
+    return { geometry, waves };
+  }, []);
+
   useFrame((_, dt) => {
     store.advance(dt);
     const s = store.state;
     const t = performance.now() / 1000;
 
-    // Gentle water bob.
-    if (waterRef.current) waterRef.current.position.y = -0.05 + Math.sin(t * 0.6) * 0.04;
+    // Ripple the water surface: bob each vertex on its own sine wave. With
+    // flatShading the material re-derives face normals from the moving
+    // positions, so the low-poly facets shimmer as the swells pass.
+    const wpos = water.geometry.attributes.position;
+    for (let i = 0; i < water.waves.length; i++) {
+      const w = water.waves[i];
+      const y = w.initY + Math.sin(t * 1.3 + w.phaseA) * w.amp + Math.cos(t * 0.9 + w.phaseB) * w.amp * 0.85;
+      wpos.setY(i, y);
+    }
+    wpos.needsUpdate = true;
 
     const active = s.phase === "waiting" || s.phase === "bite" || s.phase === "fighting";
     const biting = s.phase === "bite";
@@ -101,7 +162,10 @@ export function FishingScene({ store }: { store: FishingStore }) {
       bobberVisible = eased < 0.55;
     }
     const jitter = nibbling ? Math.sin(t * 31) * 0.05 : 0;
-    v.fish.set(fx + jitter, 0.06 + splash - dip, fz);
+    // Let the float ride the swells: lift it by the water height sampled at its
+    // own position (the plane's vertices were updated above this frame).
+    const wave = sampleWaterHeight(wpos, fx + jitter, fz);
+    v.fish.set(fx + jitter, 0.06 + wave + splash - dip, fz);
     fishRef.current.position.copy(v.fish);
     if (bobberVisualRef.current) bobberVisualRef.current.visible = bobberVisible;
 
@@ -164,8 +228,7 @@ export function FishingScene({ store }: { store: FishingStore }) {
       />
 
       {/* Water */}
-      <mesh ref={waterRef} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[80, 80, 20, 20]} />
+      <mesh ref={waterRef} geometry={water.geometry} position={[0, WATER_BASE_Y, 0]} receiveShadow>
         <meshStandardMaterial color={palette.water} flatShading roughness={0.5} transparent opacity={0.95} />
       </mesh>
 
