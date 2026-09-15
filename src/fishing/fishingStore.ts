@@ -33,6 +33,9 @@ export interface Catch {
   bait?: { grade: number; forTiers: number[] };
 }
 
+/** Wind-up + throw + bobber flight, in seconds. */
+export const CAST_ANIM_SEC = 1.18;
+
 /**
  * A tiny external store holding the live fight. The R3F scene steps it inside
  * its render loop (single source of truth, no duplicate timers) and updates
@@ -96,6 +99,10 @@ export class FishingStore {
   private wasNibbling = false;
   private wasRunning = false;
 
+  /** Seconds left in the rod wind-up / throw. 0 = not animating. */
+  castAnim = 0;
+  private castAnimDur = CAST_ANIM_SEC;
+
   constructor(line: LineSpec, tier = 1, water: Water = "fresh") {
     this.line = line;
     this.selectedTier = tier;
@@ -134,6 +141,17 @@ export class FishingStore {
     return p === "idle" || p === "landed" || p === "lost";
   }
 
+  /** True while the wind-up / throw is playing (fight has not started yet). */
+  get casting(): boolean {
+    return this.castAnim > 0;
+  }
+
+  /** 0..1 through the cast animation; 0 when not casting. */
+  get castT(): number {
+    if (this.castAnim <= 0 || this.castAnimDur <= 0) return 0;
+    return 1 - this.castAnim / this.castAnimDur;
+  }
+
   // --- input ---
   setReel(v: number) {
     this.input.reel = Math.max(0, Math.min(1, v));
@@ -158,7 +176,7 @@ export class FishingStore {
 
   /** Choose which tier's pool to fish. Boat tiers are locked until boats exist. */
   selectTier(tier: number) {
-    if (!this.idle() || tier === this.selectedTier || this.tierLocked(tier)) return;
+    if (!this.idle() || this.casting || tier === this.selectedTier || this.tierLocked(tier)) return;
     this.selectedTier = tier;
     this._fish = this.displayFish();
     this.state = makeFight(this._fish);
@@ -166,7 +184,7 @@ export class FishingStore {
   }
 
   setWater(water: Water) {
-    if (!this.idle() || water === this.selectedWater) return;
+    if (!this.idle() || this.casting || water === this.selectedWater) return;
     this.selectedWater = water;
     this._fish = this.displayFish();
     this.state = makeFight(this._fish);
@@ -231,8 +249,8 @@ export class FishingStore {
 
   cast() {
     // A pending catch must be resolved (kept/trashed) before the next cast.
-    if (!this.idle() || this.castBlocked() || this.lastCatch) return;
-    this.beginCast();
+    if (!this.idle() || this.castBlocked() || this.lastCatch || this.casting) return;
+    this.startCastAnim();
   }
 
   /** Bank the pending catch (junk is never banked) and close the reveal. */
@@ -258,8 +276,17 @@ export class FishingStore {
 
   /** Re-throw: bail on a slow bite and roll a fresh fish + wait. */
   recast() {
-    if (this.castBlocked() || this.state.phase === "fighting") return;
-    this.beginCast();
+    if (this.castBlocked() || this.casting || this.state.phase === "fighting") return;
+    this.startCastAnim();
+  }
+
+  /** Play the throw animation; the bite wait starts when it finishes. */
+  private startCastAnim() {
+    this.castAnimDur = CAST_ANIM_SEC;
+    this.castAnim = CAST_ANIM_SEC;
+    this.pendingHook = false;
+    this.releaseInput();
+    this.notify();
   }
 
   private beginCast() {
@@ -291,7 +318,6 @@ export class FishingStore {
     }
     const wait = rollWaitTime(this.currentHole) * (baited ? this.baitWaitFactor : 1);
     this.state = startCast(this._fish, wait);
-    sfx.cast();
     // Live bait is eaten by the bite — only a real fish (not junk) consumes it.
     // Synthetic lures aren't eaten; they resolve when a hooked fight ends
     // (soft wear on a landing, gone outright with a lost fish).
@@ -302,6 +328,7 @@ export class FishingStore {
   }
 
   reset() {
+    this.castAnim = 0;
     this.state = makeFight(this._fish);
     this.releaseInput();
     this.notify();
@@ -309,6 +336,13 @@ export class FishingStore {
 
   /** Step the simulation. Called once per render frame from the scene. */
   advance(dt: number) {
+    const dtClamped = Math.min(dt, 1 / 20);
+    if (this.castAnim > 0) {
+      this.castAnim = Math.max(0, this.castAnim - dtClamped);
+      if (this.castAnim <= 0) this.beginCast();
+      return;
+    }
+
     const prevPhase = this.state.phase;
     const input: FightInput = {
       reel: this.input.reel,
@@ -318,7 +352,7 @@ export class FishingStore {
     this.pendingHook = false;
 
     // Clamp dt so a tab-out / long frame can't teleport the fight.
-    stepFight(this.state, input, this._fish, this.line, Math.min(dt, 1 / 20));
+    stepFight(this.state, input, this._fish, this.line, dtClamped);
 
     // --- sound: phase / event edges ---
     const s = this.state;

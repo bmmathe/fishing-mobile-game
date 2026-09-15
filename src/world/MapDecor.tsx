@@ -627,18 +627,49 @@ export function Pebbles({ center, innerRadius, outerRadius, count = 25, seed = 1
 export function Islet({ position, scale = 1, kind = "pine" }: { position: V3; scale?: number; kind?: "pine" | "palm" | "rock" }) {
   return (
     <group position={position} scale={scale}>
-      <mesh position={[0, -0.1, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[1.0, 1.35, 0.5, 8]} />
+      {/* Irregular sand shelf (offset discs so the shoreline isn't a perfect circle). */}
+      <mesh position={[0, -0.12, 0]} rotation={[0, 0.45, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[1.05, 1.42, 0.48, 7]} />
         <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
       </mesh>
-      <mesh position={[0, 0.12, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.72, 0.95, 0.24, 8]} />
+      <mesh position={[0.5, -0.16, 0.28]} rotation={[0, 1.1, 0]} receiveShadow>
+        <cylinderGeometry args={[0.52, 0.72, 0.34, 6]} />
+        <meshStandardMaterial color={palette.sandWet} flatShading roughness={1} />
+      </mesh>
+      <mesh position={[-0.42, -0.16, -0.22]} rotation={[0, 0.7, 0]} receiveShadow>
+        <cylinderGeometry args={[0.46, 0.6, 0.3, 6]} />
+        <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
+      </mesh>
+      {/* Grass mound + a second hummock so the top isn't a single pancake. */}
+      <mesh position={[0.04, 0.12, 0]} rotation={[0, 0.35, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.68, 0.92, 0.26, 7]} />
         <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
       </mesh>
-      {kind === "pine" && <PineTree position={[0.1, 0.22, 0]} scale={0.9} />}
-      {kind === "palm" && <PalmTree position={[0, 0.22, 0.1]} scale={0.85} />}
-      {kind === "rock" && <Rock position={[0, 0.22, 0]} cluster scale={1.4} />}
-      <Rock position={[-0.55, 0.2, 0.3]} scale={0.7} />
+      <mesh position={[-0.32, 0.16, 0.2]} rotation={[0.12, 0.8, 0]} castShadow>
+        <icosahedronGeometry args={[0.3, 0]} />
+        <meshStandardMaterial color={palette.grassDark} flatShading roughness={1} />
+      </mesh>
+      {kind === "pine" && (
+        <>
+          <PineTree position={[0.12, 0.22, -0.06]} scale={0.95} />
+          <PineTree position={[-0.38, 0.22, 0.28]} scale={0.52} lean={-0.1} />
+        </>
+      )}
+      {kind === "palm" && (
+        <>
+          <PalmTree position={[0.05, 0.22, 0.08]} scale={0.9} />
+          <PalmTree position={[-0.4, 0.2, -0.15]} scale={0.5} />
+        </>
+      )}
+      {kind === "rock" && (
+        <>
+          <Rock position={[0.05, 0.22, 0]} cluster scale={1.45} />
+          <Rock position={[0.45, 0.14, 0.28]} scale={0.85} />
+        </>
+      )}
+      <Rock position={[-0.72, 0.08, 0.32]} scale={0.7} />
+      <Rock position={[0.62, 0.05, -0.22]} scale={0.48} />
+      <Reeds position={[-0.95, 0.0, 0.08]} scale={0.7} />
     </group>
   );
 }

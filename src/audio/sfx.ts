@@ -175,9 +175,19 @@ class Sfx {
 
   /** Cast: rod whoosh, then the bobber plops down. */
   cast() {
+    this.castWhoosh();
+    this.castSplash(0.32);
+  }
+
+  /** Line zipping out as the rod snaps forward. */
+  castWhoosh() {
     this.noise({ dur: 0.28, vol: 0.14, from: 500, to: 3200, type: "bandpass" });
-    this.tone({ freq: 320, end: 85, dur: 0.13, type: "sine", vol: 0.28, at: 0.32 });
-    this.noise({ dur: 0.12, vol: 0.12, from: 1200, to: 500, at: 0.33 });
+  }
+
+  /** Bobber hitting the water. */
+  castSplash(at = 0) {
+    this.tone({ freq: 320, end: 85, dur: 0.13, type: "sine", vol: 0.28, at });
+    this.noise({ dur: 0.12, vol: 0.12, from: 1200, to: 500, at: at + 0.01 });
   }
 
   /** Soft double blip: something's sniffing the bait. */

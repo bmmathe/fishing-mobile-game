@@ -57,6 +57,7 @@ export function FishingHud({
   const tensionPct = Math.min(s.tension / store.line.maxTension, 1.2) * 100;
   const danger = store.danger;
   const distancePct = (1 - s.distance / s.startDistance) * 100;
+  const casting = store.casting;
 
   // Keyboard controls for desktop testing.
   useEffect(() => {
@@ -92,14 +93,14 @@ export function FishingHud({
   // The bite keeps the wait panel (and its PULL button) up — the bobber is the
   // tell, not a panel switch. Fight UI appears only once the hook is set.
   const fighting = s.phase === "fighting";
-  const waiting = s.phase === "waiting" || s.phase === "bite";
-  const showCast = s.phase === "idle" || s.phase === "landed" || s.phase === "lost";
+  const waiting = !casting && (s.phase === "waiting" || s.phase === "bite");
+  const showCast = !casting && (s.phase === "idle" || s.phase === "landed" || s.phase === "lost");
   const isJunk = store.fish.kind === "junk";
   const pending = store.lastCatch;
   // Don't reveal the species until the catch modal after landing. While waiting
   // or biting, the bobber is the tell — no center text to steal attention.
   const centerMsg =
-    pending || s.phase === "waiting" || s.phase === "bite" ? null : s.message;
+    pending || casting || s.phase === "waiting" || s.phase === "bite" ? null : s.message;
 
   return (
     <div style={ui.root}>
@@ -190,9 +191,9 @@ export function FishingHud({
           <CastPanel store={store} bait={bait} hooks={hooks} coolerFull={cooler?.full ?? false} />
         ) : waiting ? (
           <WaitPanel store={store} />
-        ) : (
+        ) : fighting ? (
           <ReelStick store={store} />
-        )}
+        ) : null}
       </div>
 
       {/* First-timer how-to-fish coach */}
@@ -323,7 +324,7 @@ function TutorialCoach({ store }: { store: FishingStore }) {
     // Runs on every throttled store notify (~25/s), which is our tick.
   });
 
-  if (step === "hidden") return null;
+  if (store.casting || step === "hidden") return null;
   const idx = TUT_ORDER.indexOf(step);
 
   return (
