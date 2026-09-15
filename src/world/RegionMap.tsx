@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
@@ -11,10 +11,12 @@ import {
   Cloud,
   Dock,
   Fish,
+  GrassTufts,
   Gull,
   LeafTree,
   LilyPad,
   Mountain,
+  Pebbles,
   PineTree,
   Reeds,
   RippleRing,
@@ -22,6 +24,7 @@ import {
   Sailboat,
 } from "./MapDecor";
 import { MAP_PLAYER_CONTROLS_OFFSET } from "./mapLayout";
+import { WaterMaterial } from "./WaterMaterial";
 
 /**
  * Level 2 of the overworld: a low-poly diorama of one region. Land on the west,
@@ -67,12 +70,30 @@ export function RegionMap({
         dpr={[1, 2]}
         camera={{ position: [focus[0], 14, focus[1] + 15], fov: 38, near: 0.1, far: 200 }}
         gl={{ antialias: true }}
+        onCreated={({ gl }) => {
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        }}
       >
         <color attach="background" args={[palette.sky]} />
         <fog attach="fog" args={[palette.fog, 35, 80]} />
-        <ambientLight intensity={0.9} />
-        <hemisphereLight args={[palette.sky, palette.grassDark, 0.5]} />
-        <directionalLight position={[8, 18, 6]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} />
+        <ambientLight intensity={0.68} />
+        <hemisphereLight args={[palette.skyFill, palette.groundFill, 0.7]} />
+        <directionalLight
+          color={palette.sunlight}
+          position={[9, 17, 7]}
+          intensity={1.1}
+          castShadow
+          shadow-mapSize={[2048, 2048]}
+          shadow-camera-left={-14}
+          shadow-camera-right={5}
+          shadow-camera-top={12}
+          shadow-camera-bottom={-12}
+          shadow-camera-near={1}
+          shadow-camera-far={40}
+          shadow-normalBias={0.05}
+          shadow-bias={-0.0015}
+          shadow-radius={4}
+        />
 
         <Terrain />
         <ShoreDecor />
@@ -94,6 +115,7 @@ export function RegionMap({
           <SpotPin
             key={s.id}
             spot={s}
+            selected={selected?.id === s.id}
             resting={restUntilFor(s) > 0}
             // First-timers are confined to gentle T1-2 water — anything that
             // can hook a T3+ fish is locked until the tutorial is done.
@@ -105,6 +127,12 @@ export function RegionMap({
             }}
           />
         ))}
+
+        <SplashSpawner
+          points={landSpots
+            .filter((s) => s.water === "fresh")
+            .map((s) => [s.pos[0], 0.36, s.pos[1]] as [number, number, number])}
+        />
 
         <MapOrbitControls
           target={[focus[0], 0, focus[1] + 1]}
@@ -171,6 +199,28 @@ function useCoastSlab(offset: number, depth: number) {
   }, [offset, depth]);
 }
 
+/** Plan B grass-tone patches (§4.2): flat tinted discs scatter dry/dark mottling
+ *  across the field. Vertex-color noise on the extruded slab was tried first but
+ *  the cap has no interior vertices to tint, so the effect was invisible. Positions
+ *  are hand-picked to sit in open grass between POIs and clear of pond banks.
+ *  Offset 0.01 above the land top (0.3): the original 0.001 gap wasn't enough
+ *  depth-buffer separation at typical camera distance and z-fought with the
+ *  slab underneath (visible as dashed banding across the field).
+ *  Heights are additionally staggered per patch (+0.005 steps): several patches
+ *  overlap each other, and two discs at the identical y are exactly coplanar in
+ *  the overlap — z-fighting that flickers while the camera moves and freezes
+ *  into a dithered checkerboard when it stops. */
+const GRASS_PATCHES: { pos: [number, number, number]; r: number; color: string }[] = [
+  { pos: [-8.5, 0.31, -6.5], r: 2.4, color: palette.grassDark },
+  { pos: [-10.5, 0.315, 3], r: 2.6, color: palette.grassDry },
+  { pos: [-3.5, 0.32, 6.5], r: 2.5, color: palette.grassDark },
+  { pos: [1.4, 0.325, 5.4], r: 1.7, color: palette.grassDry },
+  { pos: [-6, 0.33, 7.5], r: 2.3, color: palette.grassDark },
+  { pos: [-2, 0.335, 7.8], r: 1.8, color: palette.grassDry },
+  { pos: [-10, 0.34, -4], r: 1.9, color: palette.grassDark },
+  { pos: [1, 0.345, 0], r: 1.6, color: palette.grassDry },
+];
+
 /** Ocean, grass landmass with a wavy coast, sand fringe, and a foam line. */
 function Terrain() {
   const land = useCoastSlab(0, 0.5);
@@ -181,20 +231,62 @@ function Terrain() {
       {/* Ocean (covers everything; land layers stack on top to the west) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.2, 0]} receiveShadow>
         <planeGeometry args={[60, 44]} />
-        <meshStandardMaterial color={palette.water} flatShading roughness={0.5} />
+        <WaterMaterial deep={palette.water} gradient={false} />
       </mesh>
-      {/* shallow-water tint just off the coast */}
-      <mesh geometry={foam} position={[0, -0.19, 0]} receiveShadow>
-        <meshStandardMaterial color={palette.waterShallow} flatShading roughness={0.6} />
+      {/* shallow-water tint just off the coast.
+          land/sand/foam all close their extruded shape at the same south (z=11)
+          and north (z=-11) edge, so their vertical side walls sit exactly
+          coplanar over the height range they share — a guaranteed z-fight,
+          visible as a flickering dashed line along the map's south edge.
+          polygonOffset pins a stable draw priority (foam furthest back, land
+          frontmost) so the fight always resolves the same way.
+          None of the three receive real-time shadows: this ground is one huge
+          flat mesh sitting under dozens of props (trees, rocks, hummocks,
+          mountains) at every distance and angle, and no combination of bias/
+          normalBias/radius tuning removed shadow-map acne everywhere at once —
+          it just moved to a different prop's shadow edge. Props already have
+          their own soft BlobShadow decal for ground contact, so dropping the
+          real shadow-map receive here trades a subtle contact shadow for
+          zero flicker. */}
+      <mesh geometry={foam} position={[0, -0.19, 0]}>
+        <meshStandardMaterial
+          color={palette.waterShallow}
+          flatShading
+          roughness={0.45}
+          polygonOffset
+          polygonOffsetFactor={2}
+          polygonOffsetUnits={2}
+        />
       </mesh>
       {/* sand fringe */}
-      <mesh geometry={sand} position={[0, -0.2, 0]} receiveShadow>
-        <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
+      <mesh geometry={sand} position={[0, -0.2, 0]}>
+        <meshStandardMaterial
+          color={palette.sand}
+          flatShading
+          roughness={1}
+          polygonOffset
+          polygonOffsetFactor={1}
+          polygonOffsetUnits={1}
+        />
       </mesh>
       {/* grass top */}
-      <mesh geometry={land} position={[0, -0.2, 0]} receiveShadow castShadow>
-        <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
+      <mesh geometry={land} position={[0, -0.2, 0]}>
+        <meshStandardMaterial
+          color={palette.grass}
+          flatShading
+          roughness={1}
+          polygonOffset
+          polygonOffsetFactor={0}
+          polygonOffsetUnits={0}
+        />
       </mesh>
+      {/* flat grass-tone patches mottle the otherwise uniform field (§4.2 Plan B) */}
+      {GRASS_PATCHES.map((p, i) => (
+        <mesh key={`gp-${i}`} position={p.pos} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+          <circleGeometry args={[p.r, 20]} />
+          <meshStandardMaterial color={p.color} flatShading roughness={1} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -219,6 +311,42 @@ function ShoreDecor() {
       <Rock position={[-3.2, 0.3, 6.4]} cluster />
       <Rock position={[0.2, 0.3, 4.2]} scale={0.8} />
       <Rock position={[-7, 0.3, -1.4]} scale={0.9} cluster />
+
+      {/* Gentle grass hummocks so the field isn't one flat plane. Positions are
+          hand-checked to clear every California pond/pin footprint (see plan §4.3);
+          heights stay ≤0.6 so they read as meadow swells, not hills. The three
+          southern hummocks' x-extents must stay non-overlapping — the original
+          scales had two of them touching exactly and a third overlapping by
+          0.7 units, so their convex surfaces interpenetrated and z-fought at
+          the seam (flickering dashes right where two hills met).
+          icosahedronGeometry detail=1 (not 0): at detail 0 each hummock is
+          only 20 giant flat facets squashed hard in y, and several facets end
+          up nearly coplanar with the flat land they're embedded in over a
+          wide area — real z-fighting (view-angle-dependent flicker, not
+          shadow acne) right where the hummock meets the ground. detail=1
+          quadruples the face count so no single facet is big enough to
+          coincide with the ground over a visible patch.
+          No castShadow/receiveShadow: these are low-poly convex blobs embedded
+          halfway into the ground plane, so a hummock's own real-time shadow map
+          silhouette sits almost tangent to the flat land it's buried in —
+          shadow acne along that edge (visible as a flickering dashed band on
+          and around each hummock) regardless of bias tuning. They're subtle
+          enough that skipping the dynamic shadow entirely reads fine.
+          The dark hummock that was at [-8.2, 0.18, 7] kept z-fighting against
+          the flat land no matter how the facets/spacing were tuned, so it was
+          removed outright rather than continuing to chase the artifact. */}
+      <mesh position={[-3.5, 0.15, 8]} scale={[1.9, 0.5, 1.8]}>
+        <icosahedronGeometry args={[1, 1]} />
+        <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
+      </mesh>
+      <mesh position={[0.5, 0.18, 8.2]} scale={[1.6, 0.6, 1.6]}>
+        <icosahedronGeometry args={[1, 1]} />
+        <meshStandardMaterial color={palette.grassDry} flatShading roughness={1} />
+      </mesh>
+      <mesh position={[-9.3, 0.12, 1.5]} scale={[2.0, 0.4, 1.6]}>
+        <icosahedronGeometry args={[1, 1]} />
+        <meshStandardMaterial color={palette.grass} flatShading roughness={1} />
+      </mesh>
 
       {/* Coastline foam ripples + ocean life */}
       <RippleRing position={[4.6, -0.13, -6]} period={3.2} />
@@ -250,10 +378,22 @@ function FreshWaterBody({ spot }: { spot: Spot }) {
         <circleGeometry args={[radius * 1.22, 20]} />
         <meshStandardMaterial color={palette.sand} flatShading roughness={1} />
       </mesh>
+      {/* damp-sand rim seats the water into the bank instead of on top of it */}
+      <mesh position={[0, 0.32, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <ringGeometry args={[radius * 0.96, radius * 1.08, 24]} />
+        <meshStandardMaterial color={palette.sandWet} flatShading roughness={1} />
+      </mesh>
       <mesh position={[0, 0.325, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[radius, 20]} />
-        <meshStandardMaterial color={palette.waterDeep} flatShading roughness={0.6} />
+        <WaterMaterial radius={radius} />
       </mesh>
+      {/* moving surface ripples (lakes & rivers only — streams are too small) */}
+      {spot.body !== "stream" && (
+        <>
+          <RippleRing position={[radius * 0.3, 0.34, -radius * 0.2]} period={3.1} size={0.7} maxOpacity={0.3} />
+          <RippleRing position={[-radius * 0.4, 0.34, radius * 0.3]} period={4.3} size={0.5} maxOpacity={0.25} />
+        </>
+      )}
       {/* bank dressing */}
       <Reeds position={[radius * 0.82, 0.32, radius * 0.35]} scale={0.9} />
       <Reeds position={[-radius * 0.7, 0.32, -radius * 0.55]} scale={0.75} />
@@ -264,6 +404,13 @@ function FreshWaterBody({ spot }: { spot: Spot }) {
       {spot.body === "dock" && (
         <Dock position={[-radius * 0.2, 0.18, -radius * 1.1]} scale={0.8} planks={4} width={1.1} />
       )}
+      {/* scruffy dressed band of tufts + pebbles rings the pond; two hand-placed
+          props add asymmetry. Seeds are deterministic (from world pos) so the
+          scatter is identical every visit. */}
+      <GrassTufts center={[0, 0.3, 0]} innerRadius={radius * 1.25} outerRadius={radius * 1.9} count={36} seed={Math.round(x * 13 + z * 7)} />
+      <Pebbles center={[0, 0.3, 0]} innerRadius={radius * 1.2} outerRadius={radius * 1.8} count={20} seed={Math.round(x * 5 + z * 11)} />
+      <Reeds position={[radius * 0.1, 0.32, -radius * 0.9]} scale={0.85} />
+      <Rock position={[-radius * 1.15, 0.3, radius * 0.5]} scale={0.5} />
     </group>
   );
 }
@@ -290,7 +437,7 @@ function SaltShoreDressing({ spot }: { spot: Spot }) {
       </mesh>
       <mesh position={[0, -0.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[2.0, 20]} />
-        <meshStandardMaterial color={palette.waterShallow} flatShading roughness={0.6} />
+        <WaterMaterial deep={palette.waterShallow} shallow={palette.foam} radius={2.0} />
       </mesh>
       <Rock position={[1.1, -0.1, 0.6]} scale={0.7} cluster />
       <RippleRing position={[-1.4, -0.11, -0.8]} period={3.4} />
@@ -301,12 +448,15 @@ function SaltShoreDressing({ spot }: { spot: Spot }) {
 function SpotPin({
   spot,
   onSelect,
+  selected = false,
   resting = false,
   tutorialDim = false,
   tutorialTarget = false,
 }: {
   spot: Spot;
   onSelect: (s: Spot) => void;
+  /** This spot's SpotCard is currently open — pop the pin, gold ring, ripple burst. */
+  selected?: boolean;
   /** Spot rest: fished out — grayed but still tappable (card shows countdown). */
   resting?: boolean;
   /** Tutorial: this pin is inactive & grayed out. */
@@ -315,17 +465,34 @@ function SpotPin({
   tutorialTarget?: boolean;
 }) {
   const [hover, setHover] = useState(false);
+  const groupRef = useRef<THREE.Group>(null);
   const bobberRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const arrowRef = useRef<THREE.Mesh>(null);
+  const burstRef = useRef<THREE.Mesh>(null);
+  // One-shot selection ripple: start < 0 means idle; a useEffect arms it on select.
+  const burst = useRef({ armed: false, start: -1 });
   const [x, z] = spot.pos;
   const locked = spot.access === "boat" || tutorialDim;
   const base = spot.water === "fresh" ? "#4f8f74" : "#3f8fa0";
   const color = locked || resting ? "#8a8f96" : base;
+  const gold = tutorialTarget || selected;
   const seed = x * 1.7 + z;
 
-  useFrame(({ clock }) => {
+  // Fire one ripple burst on the frame `selected` flips to true.
+  useEffect(() => {
+    if (selected) { burst.current.armed = true; burst.current.start = -1; }
+  }, [selected]);
+
+  useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime + seed;
+    // Smooth spring-pop toward the target scale (no spring lib): exponential ease.
+    if (groupRef.current) {
+      const target = selected ? 1.28 : hover ? 1.18 : 1;
+      const cur = groupRef.current.scale.x;
+      const next = cur + (target - cur) * (1 - Math.exp(-12 * delta));
+      groupRef.current.scale.setScalar(next);
+    }
     // The bobber head floats gently; the ground ring pulses.
     if (bobberRef.current) bobberRef.current.position.y = 1.05 + Math.sin(t * 1.8) * 0.06;
     if (ringRef.current) {
@@ -334,6 +501,23 @@ function SpotPin({
     }
     // Tutorial arrow bounces above the target pin.
     if (arrowRef.current) arrowRef.current.position.y = 2.5 + Math.abs(Math.sin(t * 3)) * 0.35;
+    // One-shot selection ripple: scale 0.5 -> 2.2, fade 0.5 -> 0 over 0.6s, then hide.
+    if (burstRef.current) {
+      const b = burst.current;
+      if (b.armed && b.start < 0) b.start = clock.elapsedTime;
+      if (b.armed) {
+        const p = (clock.elapsedTime - b.start) / 0.6;
+        if (p >= 1) {
+          b.armed = false;
+          burstRef.current.visible = false;
+        } else {
+          burstRef.current.visible = true;
+          const s = 0.5 + p * 1.7;
+          burstRef.current.scale.set(s, s, s);
+          (burstRef.current.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - p);
+        }
+      }
+    }
   });
 
   // Shared hit handlers for the pin. Empty when locked so tutorial-dimmed /
@@ -372,7 +556,7 @@ function SpotPin({
   };
 
   return (
-    <group position={[x, 0.45, z]} scale={hover ? 1.18 : 1}>
+    <group ref={groupRef} position={[x, 0.45, z]}>
       {/* Invisible sphere — the thin bobber pole is a tiny hit target; this is the mobile tap target. */}
       <mesh position={[0, 0.75, 0]} {...pick}>
         <sphereGeometry args={[1.05, 12, 10]} />
@@ -397,16 +581,21 @@ function SpotPin({
           <meshStandardMaterial color={palette.sail} flatShading roughness={1} />
         </mesh>
       </group>
-      {/* pulsing locator ring on the ground (gold for the tutorial target) */}
+      {/* pulsing locator ring on the ground (gold for the tutorial target or when selected) */}
       <mesh ref={ringRef} position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
         <ringGeometry args={tutorialTarget ? [0.55, 0.72, 24] : [0.45, 0.55, 22]} />
         <meshBasicMaterial
-          color={tutorialTarget ? "#f4c453" : locked || resting ? "#9aa0a5" : color}
+          color={gold ? "#f4c453" : locked || resting ? "#9aa0a5" : color}
           transparent
-          opacity={tutorialTarget ? 0.75 : resting ? 0.25 : 0.45}
+          opacity={tutorialTarget ? 0.75 : selected ? 0.7 : resting ? 0.25 : 0.45}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
+      </mesh>
+      {/* one-shot ripple burst emitted when the spot is selected (hidden until armed) */}
+      <mesh ref={burstRef} position={[0, -0.09, 0]} rotation={[-Math.PI / 2, 0, 0]} visible={false} raycast={() => null}>
+        <ringGeometry args={[0.5, 0.62, 24]} />
+        <meshBasicMaterial color="#f4c453" transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
       {/* bouncing "here!" arrow for the tutorial */}
       {tutorialTarget && (
@@ -432,6 +621,90 @@ function SpotPin({
           {spot.name}
         </div>
       </Html>
+    </group>
+  );
+}
+
+/**
+ * Occasional foam splash on the fresh ponds. One hidden group is repositioned
+ * and shown for each splash (no mount/unmount, no per-frame allocation): three
+ * foam cones that rise + tilt outward and fade, plus one expanding fading ring.
+ * Placement is random; timing is random (8–15s between splashes) — only the
+ * pond centers are fixed. There is no splash sound in sfx, so audio is skipped.
+ */
+function SplashSpawner({ points }: { points: [number, number, number][] }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const cone0 = useRef<THREE.Mesh>(null);
+  const cone1 = useRef<THREE.Mesh>(null);
+  const cone2 = useRef<THREE.Mesh>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
+  // scheduling + active-splash state, all in refs (never setState per frame)
+  const state = useRef({ next: 4, start: -1, active: false });
+
+  // Stagger the first splash a few seconds in.
+  useEffect(() => { state.current.next = 4 + Math.random() * 6; }, []);
+
+  useFrame(({ clock }) => {
+    if (points.length === 0) return;
+    const cones = [cone0.current, cone1.current, cone2.current];
+    const g = groupRef.current;
+    const now = clock.elapsedTime;
+    const st = state.current;
+
+    if (!st.active && now >= st.next) {
+      const p = points[Math.floor(Math.random() * points.length)];
+      if (g) {
+        g.position.set(p[0] + (Math.random() - 0.5) * 0.8, p[1], p[2] + (Math.random() - 0.5) * 0.8);
+        g.visible = true;
+      }
+      st.active = true;
+      st.start = now;
+    }
+
+    if (st.active) {
+      const prog = (now - st.start) / 0.6;
+      if (prog >= 1) {
+        st.active = false;
+        if (g) g.visible = false;
+        st.next = now + 8 + Math.random() * 7; // next splash in 8–15s
+      } else {
+        for (let i = 0; i < 3; i++) {
+          const m = cones[i];
+          if (!m) continue;
+          const a = (i / 3) * Math.PI * 2;
+          const spread = 0.05 + prog * 0.18;
+          m.position.set(Math.cos(a) * spread, 0.02 + prog * 0.25, Math.sin(a) * spread);
+          m.rotation.z = -Math.cos(a) * prog * 0.9;
+          m.rotation.x = Math.sin(a) * prog * 0.9;
+          (m.material as THREE.MeshStandardMaterial).opacity = 1 - prog;
+        }
+        if (ringRef.current) {
+          const s = 0.4 + prog * 1.4;
+          ringRef.current.scale.set(s, s, s);
+          (ringRef.current.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - prog);
+        }
+      }
+    }
+  });
+
+  return (
+    <group ref={groupRef} visible={false} raycast={() => null}>
+      <mesh ref={cone0}>
+        <coneGeometry args={[0.03, 0.14, 4]} />
+        <meshStandardMaterial color={palette.foam} flatShading roughness={1} transparent opacity={1} />
+      </mesh>
+      <mesh ref={cone1}>
+        <coneGeometry args={[0.03, 0.14, 4]} />
+        <meshStandardMaterial color={palette.foam} flatShading roughness={1} transparent opacity={1} />
+      </mesh>
+      <mesh ref={cone2}>
+        <coneGeometry args={[0.03, 0.14, 4]} />
+        <meshStandardMaterial color={palette.foam} flatShading roughness={1} transparent opacity={1} />
+      </mesh>
+      <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.14, 0.2, 20]} />
+        <meshBasicMaterial color={palette.foam} transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
     </group>
   );
 }
